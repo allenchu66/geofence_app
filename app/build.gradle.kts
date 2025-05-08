@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -8,6 +10,15 @@ android {
     namespace = "com.allenchu66.geofenceapp"
     compileSdk = 35
 
+    val localProperties = Properties().apply {
+        val localPropsFile = rootProject.file("local.properties")
+        if (localPropsFile.exists()) {
+            localPropsFile.inputStream().use { load(it) }
+        }
+    }
+
+    val mapsApiKey: String = localProperties["GOOGLE_MAP_API_KEY"] as String
+
     defaultConfig {
         applicationId = "com.allenchu66.geofenceapp"
         minSdk = 29
@@ -16,6 +27,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        resValue("string", "google_maps_key", mapsApiKey)
     }
 
     buildTypes {
@@ -54,5 +66,6 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
+    implementation(libs.google.map)
 
 }
