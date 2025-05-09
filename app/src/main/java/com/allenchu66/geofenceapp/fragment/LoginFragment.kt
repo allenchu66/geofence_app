@@ -43,7 +43,7 @@ class LoginFragment : Fragment() {
         viewModel.loginSuccess.observe(viewLifecycleOwner) { success ->
             if (success) {
                 Toast.makeText(requireContext(), "登入成功", Toast.LENGTH_SHORT).show()
-                findNavController().navigate(R.id.action_loginFragment_to_mainMapFragment)
+                findNavController().navigate(R.id.action_loginFragment_to_mapFragment)
             } else {
                 Toast.makeText(requireContext(), "登入失敗", Toast.LENGTH_SHORT).show()
             }

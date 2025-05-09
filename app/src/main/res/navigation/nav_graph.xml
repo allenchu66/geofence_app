@@ -8,12 +8,12 @@
         android:name="com.allenchu66.geofenceapp.fragment.LoginFragment"
         android:label="Login" >
         <action
-            android:id="@+id/action_loginFragment_to_mainMapFragment"
-            app:destination="@id/mainMapFragment" />
+            android:id="@+id/action_loginFragment_to_mapFragment"
+            app:destination="@id/mapFragment" />
     </fragment>
 
     <fragment
-        android:id="@+id/mainMapFragment"
+        android:id="@+id/mapFragment"
         android:name="com.allenchu66.geofenceapp.fragment.MapFragment"
         android:label="Map" />
 </navigation>
