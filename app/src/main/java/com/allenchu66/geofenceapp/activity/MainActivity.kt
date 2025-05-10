@@ -7,6 +7,9 @@ import android.text.InputType
 import android.util.Log
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContentProviderCompat.requireContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
+import androidx.navigation.findNavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -26,12 +30,45 @@ import com.allenchu66.geofenceapp.repository.SharedUserRepository
 import com.allenchu66.geofenceapp.service.LocationUpdateService
 import com.allenchu66.geofenceapp.viewModel.SharedUserViewModel
 import com.allenchu66.geofenceapp.viewModel.SharedUserViewModelFactory
+import com.bumptech.glide.Glide
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var drawerToggle: ActionBarDrawerToggle
     private lateinit var viewModel: SharedUserViewModel
+    private lateinit var auth: FirebaseAuth
+
+    private lateinit var tvUserEmail: TextView
+    private lateinit var tvUserNickname: TextView
+    private lateinit var imageUserPhoto: ImageView
+
+    private val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        val user = firebaseAuth.currentUser
+        updateProfileUI(user)
+    }
+
+    fun updateProfileUI(user: FirebaseUser?) {
+        user?.let {
+            tvUserNickname.setText(it.displayName ?: "Untitled")
+            tvUserEmail.text = user.email
+            tvUserNickname.text = user.displayName.takeIf { !it.isNullOrBlank() } ?: "Untitled"
+
+            val photoUri = user.photoUrl
+
+            if (photoUri != null) {
+                Glide.with(this)
+                    .load(photoUri)
+                    .circleCrop()
+                    .placeholder(R.drawable.ic_default_avatar)
+                    .error(R.drawable.ic_default_avatar)
+                    .into(imageUserPhoto)
+            } else {
+                imageUserPhoto.setImageResource(R.drawable.ic_default_avatar)
+            }
+        }
+    }
 
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -45,6 +82,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        auth = FirebaseAuth.getInstance()
         initViewModel()
         setupToolbarAndDrawer()
         navigateIfLoggedIn()
@@ -115,6 +153,23 @@ class MainActivity : AppCompatActivity() {
             showAddSharedUserDialog()
         }
 
+        val navHostFragment = supportFragmentManager
+            .findFragmentById(R.id.fragmentContainerView) as NavHostFragment
+        val navController = navHostFragment.navController
+
+        val btnAccountSetting = customDrawerView.findViewById<ImageButton>(R.id.btn_account_settings)
+        btnAccountSetting.setOnClickListener{
+            binding.drawerLayout.closeDrawers()
+            navController.navigate(R.id.accountSettingsFragment)
+        }
+
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        if (currentUser != null) {
+           tvUserEmail = customDrawerView.findViewById<TextView>(R.id.drawer_user_email)
+           tvUserNickname = customDrawerView.findViewById<TextView>(R.id.drawer_user_nickname)
+           imageUserPhoto = customDrawerView.findViewById<ImageView>(R.id.drawer_user_photo)
+           updateProfileUI(currentUser)
+        }
     }
 
     private fun navigateIfLoggedIn() {
@@ -184,4 +239,14 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("Cancel", null)
             .show()
     }
+
+    override fun onStart() {
+        super.onStart()
+        auth.addAuthStateListener(authStateListener)
+    }
+    override fun onStop() {
+        super.onStop()
+        auth.removeAuthStateListener(authStateListener)
+    }
+
 }

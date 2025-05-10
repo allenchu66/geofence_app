@@ -13,18 +13,58 @@ class SharedUserRepository {
     private val auth = FirebaseAuth.getInstance()
 
     fun getSharedUsers(callback: (List<SharedUser>) -> Unit) {
-        val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-
-        firestore.collection("users")
-            .document(currentUid)
+        val meUid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val sharedRef = firestore
+            .collection("users").document(meUid)
             .collection("shared_friends")
-            .addSnapshotListener { snapshot, _ ->
-                if (snapshot != null) {
-                    val list = snapshot.documents.mapNotNull { it.toObject(SharedUser::class.java) }
-                    callback(list)
-                }
+
+        sharedRef.addSnapshotListener { snap, error ->
+            if (error != null) return@addSnapshotListener
+            if (snap == null) {
+                callback(emptyList())
+                return@addSnapshotListener
             }
+
+            val tempList = mutableListOf<SharedUser>()
+            val total = snap.size()
+            if (total == 0) {
+                callback(emptyList()); return@addSnapshotListener
+            }
+
+            for (doc in snap.documents) {
+                val friendUid = doc.id
+                val status    = doc.getString("status").orEmpty()
+
+                firestore.collection("users")
+                    .document(friendUid)
+                    .get()
+                    .addOnSuccessListener { userDoc ->
+                        val email       = userDoc.getString("email").orEmpty()
+                        val displayName = userDoc.getString("displayName").orEmpty()
+                        val photoUri    = userDoc.getString("photoUri")
+
+                        tempList.add(
+                            SharedUser(
+                                email       = email,
+                                displayName = displayName,
+                                photoUri    = photoUri.orEmpty(),
+                                status      = status
+                            )
+                        )
+                        if (tempList.size == total) {
+                            callback(tempList)
+                        }
+                    }
+                    .addOnFailureListener {
+                        tempList.add(SharedUser(status = status))
+                        if (tempList.size == total) {
+                            callback(tempList)
+                        }
+                    }
+            }
+        }
     }
+
 
     fun updateShareStatusByEmail(email: String, status: String, onFinish: () -> Unit) {
         val db = FirebaseFirestore.getInstance()

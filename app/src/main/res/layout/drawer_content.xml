@@ -4,12 +4,73 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
+
+    <!-- 使用者資訊區塊 -->
+    <LinearLayout
+        android:id="@+id/user_info_section"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/drawer_user_photo"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_default_avatar"
+            android:scaleType="centerCrop"
+            android:background="@drawable/circle_background"
+            android:contentDescription="Profile picture"
+            android:layout_marginEnd="12dp"
+            android:layout_gravity="center_vertical"/>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/drawer_user_nickname"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Nickname"
+                android:textStyle="bold"
+                android:textSize="16sp"/>
+
+            <TextView
+                android:id="@+id/drawer_user_email"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="user@example.com"
+                android:textSize="14sp"
+                android:textColor="#888888"/>
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btn_account_settings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_setting_black"
+            android:contentDescription="Account settings"
+            android:background="?attr/selectableItemBackgroundBorderless"/>
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_margin="5dp"
+        android:background="#212121"/>
+
+    <!-- 共享者清單 -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/share_user_recyclerView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"/>
 
+    <!-- 新增共享者按鈕 -->
     <Button
         android:id="@+id/btn_add_shared_user"
         android:layout_width="match_parent"

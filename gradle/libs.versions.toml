@@ -16,6 +16,9 @@ activity = "1.10.1"
 constraintlayout = "2.1.4"
 google_map = "18.2.0"
 playServicesLocation = "21.3.0"
+imageCropper = "4.6.0"
+firebaseStorageKtx = "21.0.1"
+glide = "4.16.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -34,6 +37,9 @@ androidx-activity = { group = "androidx.activity", name = "activity", version.re
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 google-map = { group = "com.google.android.gms", name = "play-services-maps",version.ref = "google_map" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+image-cropper = {group = "com.vanniktech",name = "android-image-cropper",version.ref = "imageCropper"}
+firebase-storage-ktx = { group = "com.google.firebase", name = "firebase-storage-ktx", version.ref = "firebaseStorageKtx" }
+glide = {group = "com.github.bumptech.glide",name = "glide",version.ref = "glide"}
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

@@ -1,11 +1,14 @@
 package com.allenchu66.geofenceapp.adapter
 
+import android.util.Log
 import com.allenchu66.geofenceapp.databinding.SharedUserItemBinding
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import com.allenchu66.geofenceapp.R
 import com.allenchu66.geofenceapp.model.SharedUser
+import com.bumptech.glide.Glide
 
 class SharedUserAdapter(
     private var users: List<SharedUser>,
@@ -24,11 +27,17 @@ class SharedUserAdapter(
         val user = users[position]
         val b = holder.binding
 
-//        Glide.with(b.imgAvatar.context)
-//            .load(user.avatarUrl)
-//            .placeholder(com.allenchu66.geofenceapp.R.drawable.ic_default_avatar)
-//            .circleCrop()
-//            .into(b.imgAvatar)
+        val photoUri = user.photoUri
+        if (photoUri != null) {
+            Glide.with(b.imgAvatar.context)
+                .load(photoUri)
+                .circleCrop()
+                .placeholder(R.drawable.ic_default_avatar)
+                .error(R.drawable.ic_default_avatar)
+                .into(b.imgAvatar)
+        } else {
+            b.imgAvatar.setImageResource(R.drawable.ic_default_avatar)
+        }
 
         b.textEmail.text = user.email
         b.textStatus.text = when (user.status) {
