@@ -10,8 +10,6 @@ import com.google.firebase.firestore.firestore
 
 class SharedUserRepository {
     private val firestore = Firebase.firestore
-    private val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email.orEmpty()
-    private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
 
     fun getSharedUsers(callback: (List<SharedUser>) -> Unit) {
@@ -67,7 +65,7 @@ class SharedUserRepository {
 
 
     fun sendShareRequestByEmail(email: String, onResult: (Boolean, String) -> Unit) {
-        db.collection("users")
+        firestore.collection("users")
             .whereEqualTo("email", email)
             .get()
             .addOnSuccessListener { querySnapshot ->
@@ -97,13 +95,13 @@ class SharedUserRepository {
                     "created_at" to FieldValue.serverTimestamp()
                 )
 
-                val batch = db.batch()
+                val batch = firestore.batch()
 
-                val targetRef = db.collection("users")
+                val targetRef = firestore.collection("users")
                     .document(targetUid)
                     .collection("shared_friends")
                     .document(currentUid)
-                val selfRef = db.collection("users")
+                val selfRef = firestore.collection("users")
                     .document(currentUid)
                     .collection("shared_friends")
                     .document(targetUid)
