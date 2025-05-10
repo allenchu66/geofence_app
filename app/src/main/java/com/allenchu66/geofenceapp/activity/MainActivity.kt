@@ -3,21 +3,35 @@ package com.allenchu66.geofenceapp.activity
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
+import android.text.InputType
+import android.util.Log
+import android.widget.Button
+import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.ActionBarDrawerToggle
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContentProviderCompat.requireContext
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.fragment.NavHostFragment
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.allenchu66.geofenceapp.R
+import com.allenchu66.geofenceapp.adapter.SharedUserAdapter
 import com.allenchu66.geofenceapp.databinding.ActivityMainBinding
+import com.allenchu66.geofenceapp.repository.SharedUserRepository
 import com.allenchu66.geofenceapp.service.LocationUpdateService
+import com.allenchu66.geofenceapp.viewModel.SharedUserViewModel
+import com.allenchu66.geofenceapp.viewModel.SharedUserViewModelFactory
 import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var drawerToggle: ActionBarDrawerToggle
+    private lateinit var viewModel: SharedUserViewModel
 
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -31,9 +45,18 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        initViewModel()
         setupToolbarAndDrawer()
         navigateIfLoggedIn()
         requestLocationPermissions()
+    }
+
+    private fun initViewModel(){
+        val repository = SharedUserRepository()
+        val factory = SharedUserViewModelFactory(repository)
+        viewModel = ViewModelProvider(this, factory).get(SharedUserViewModel::class.java)
+
+        viewModel.loadSharedUsers()
     }
 
     private fun setupToolbarAndDrawer() {
@@ -48,6 +71,50 @@ class MainActivity : AppCompatActivity() {
         )
         binding.drawerLayout.addDrawerListener(drawerToggle)
         drawerToggle.syncState()
+
+        val navView = binding.navView
+        val customDrawerView = layoutInflater.inflate(R.layout.drawer_content, navView, false)
+        navView.removeAllViews()
+        navView.addView(customDrawerView)
+
+        val adapter = SharedUserAdapter(emptyList()) { user ->
+            when (user.status) {
+                "pending" -> {
+                    // 接受邀請（自己被邀請的人）
+                    viewModel.updateShareStatus(user.email, "shared")
+                }
+                "waiting" -> {
+                    // 自己取消邀請對方
+                    viewModel.updateShareStatus(user.email, "cancelled")
+                }
+                "shared" -> {
+                    // 雙方停止共享
+                    viewModel.updateShareStatus(user.email, "none")
+                }
+                "declined", "cancelled", "none" -> {
+                    // 重新邀請
+                    viewModel.sendShareRequest(user.email)
+                }
+            }
+        }
+
+        val recyclerView = customDrawerView.findViewById<RecyclerView>(R.id.share_user_recyclerView)
+        recyclerView.adapter = adapter
+        recyclerView.layoutManager = LinearLayoutManager(this)
+
+        viewModel.sharedUsers.observe(this) { userList ->
+            adapter.updateList(userList)
+        }
+
+        viewModel.shareResult.observe(this){ (success, message) ->
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
+
+        val btn_add_shared_user = customDrawerView.findViewById<Button>(R.id.btn_add_shared_user)
+        btn_add_shared_user.setOnClickListener{
+            showAddSharedUserDialog()
+        }
+
     }
 
     private fun navigateIfLoggedIn() {
@@ -95,5 +162,26 @@ class MainActivity : AppCompatActivity() {
             }
             startActivity(intent)
         }
+    }
+
+    private fun showAddSharedUserDialog() {
+        val input = EditText(this).apply {
+            hint = "Enter friend's email"
+            inputType = InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Add Shared User")
+            .setView(input)
+            .setPositiveButton("Send") { _, _ ->
+                val email = input.text.toString().trim()
+                if (email.isNotEmpty()) {
+                    viewModel.sendShareRequest(email)
+                } else {
+                    Toast.makeText(this, "Email cannot be empty", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 }

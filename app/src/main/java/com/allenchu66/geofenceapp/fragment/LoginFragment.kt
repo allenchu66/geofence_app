@@ -13,6 +13,10 @@ import com.allenchu66.geofenceapp.databinding.FragmentLoginBinding
 import com.allenchu66.geofenceapp.repository.FirebaseAuthRepository
 import com.allenchu66.geofenceapp.viewModel.LoginViewModel
 import com.allenchu66.geofenceapp.viewModel.LoginViewModelFactory
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 
 class LoginFragment : Fragment() {
     private var _binding: FragmentLoginBinding? = null
@@ -42,10 +46,31 @@ class LoginFragment : Fragment() {
         }
         viewModel.loginSuccess.observe(viewLifecycleOwner) { success ->
             if (success) {
+                val user = FirebaseAuth.getInstance().currentUser
+                if (user != null) {
+                    createUserIfNotExists(user)
+                }
+
                 Toast.makeText(requireContext(), "登入成功", Toast.LENGTH_SHORT).show()
                 findNavController().navigate(R.id.action_loginFragment_to_mapFragment)
             } else {
                 Toast.makeText(requireContext(), "登入失敗", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun createUserIfNotExists(user: FirebaseUser) {
+        val db = FirebaseFirestore.getInstance()
+        val userDoc = db.collection("users").document(user.uid)
+
+        userDoc.get().addOnSuccessListener { document ->
+            if (!document.exists()) {
+                val newUser = hashMapOf(
+                    "email" to user.email,
+                    "name" to (user.displayName ?: ""),
+                    "created_at" to FieldValue.serverTimestamp()
+                )
+                userDoc.set(newUser)
             }
         }
     }
