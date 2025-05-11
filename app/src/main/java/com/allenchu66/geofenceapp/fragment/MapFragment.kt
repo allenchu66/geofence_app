@@ -3,12 +3,17 @@ package com.allenchu66.geofenceapp.fragment
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.os.Handler
+import android.transition.Transition
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -19,6 +24,8 @@ import com.allenchu66.geofenceapp.databinding.FragmentMapBinding
 import com.allenchu66.geofenceapp.repository.LocationRepository
 import com.allenchu66.geofenceapp.viewModel.MapViewModel
 import com.allenchu66.geofenceapp.viewModel.MapViewModelFactory
+import com.bumptech.glide.Glide
+import com.bumptech.glide.request.target.CustomTarget
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -26,6 +33,7 @@ import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
 import com.google.firebase.auth.FirebaseAuth
+import de.hdodenhof.circleimageview.CircleImageView
 
 class MapFragment : Fragment(), OnMapReadyCallback {
 
@@ -61,11 +69,14 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         mapFragment.getMapAsync(this)
 
         // 觀察共享好友位置資料
-        viewModel.sharedLocations.observe(viewLifecycleOwner) { locationMap ->
-            for ((uid, latLng) in locationMap) {
-                updateOrAddMarker(uid, latLng)
+        viewModel.sharedLocations.observe(viewLifecycleOwner) {  list ->
+            list.forEach { shared ->
+                updateOrAddMarker(
+                    userId   = shared.uid,
+                    latLng   = shared.latLng,
+                    photoUrl = shared.user.photoUri
+                )
             }
-            zoomToFitAllMarkers()
         }
 
         // 定時上傳自己的位置
@@ -138,19 +149,61 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     }
 
     // 新增或更新 Marker
-    private fun updateOrAddMarker(userId: String, latLng: LatLng) {
-        val existingMarker = markerMap[userId]
-        if (existingMarker != null) {
-            existingMarker.position = latLng
-        } else {
-            val newMarker = googleMap.addMarker(
-                MarkerOptions()
-                    .position(latLng)
-                    .title("Shared User: $userId")
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
-            )
-            newMarker?.let { markerMap[userId] = it }
-        }
+    private fun updateOrAddMarker(userId: String, latLng: LatLng, photoUrl: String) {
+        Glide.with(this)
+            .asBitmap()
+            .load(photoUrl)
+            .circleCrop()
+            .into(object : CustomTarget<Bitmap>(60, 60) {
+                override fun onResourceReady(
+                    bitmap: Bitmap,
+                    transition: com.bumptech.glide.request.transition.Transition<in Bitmap>?
+                ) {
+                    val markerBmp = getMarkerBitmapFromView(bitmap)
+                    val icon = BitmapDescriptorFactory.fromBitmap(markerBmp)
+
+                    val existing = markerMap[userId]
+                    if (existing != null) {
+                        existing.position = latLng
+                        existing.setIcon(icon)
+                    } else {
+                        val marker = googleMap.addMarker(
+                            MarkerOptions()
+                                .position(latLng)
+                                .title("Shared User: $userId")
+                                .icon(icon)
+                        )
+                        marker?.let { markerMap[userId] = it }
+                    }
+                    // 重新調整縮放（可選）
+                    //zoomToFitAllMarkers()
+                }
+
+                override fun onLoadCleared(placeholder: Drawable?) {
+                }
+            })
+    }
+
+    private fun getMarkerBitmapFromView(photo: Bitmap): Bitmap {
+        // Inflate
+        val view = LayoutInflater.from(requireContext())
+            .inflate(R.layout.marker_layout, null, false)
+        val iv = view.findViewById<ImageView>(R.id.image_avatar)
+        iv.setImageBitmap(photo)
+
+        // 測量、佈局、畫到 Canvas
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+        val bitmap = Bitmap.createBitmap(
+            view.measuredWidth, view.measuredHeight,
+            Bitmap.Config.ARGB_8888
+        )
+        val canvas = Canvas(bitmap)
+        view.draw(canvas)
+        return bitmap
     }
 
     // 自動調整視角包住所有 Marker
