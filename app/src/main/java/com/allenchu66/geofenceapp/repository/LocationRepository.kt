@@ -1,6 +1,7 @@
 package com.allenchu66.geofenceapp.repository
 
 import android.util.Log
+import com.allenchu66.geofenceapp.model.ShareRequest
 import com.allenchu66.geofenceapp.model.SharedLocation
 import com.allenchu66.geofenceapp.model.SharedUser
 import com.google.android.gms.maps.model.LatLng
@@ -34,42 +35,40 @@ class LocationRepository {
             }
     }
 
-    /**
-     * 同時監聽 shared_friends 裡的用户资料 & locations 裡的位置，
-     * 然後把 SharedUser + LatLng 組成 SharedLocation 回傳
-     */
+
     fun listenToSharedLocations(
         currentUserId: String,
         onUpdate: (List<SharedLocation>) -> Unit
     ) {
-        Log.d("20250511",currentUserId)
-
         val userMap = mutableMapOf<String, SharedUser>()
         val locationMap = mutableMapOf<String, LatLng>()
 
-        firestore.collection("users")
-            .document(currentUserId)
-            .collection("shared_friends")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) return@addSnapshotListener
+        firestore.collection("share_requests")
+            .whereArrayContains("participants", currentUserId)
+            .addSnapshotListener { snap, err ->
+                if (err != null || snap == null) return@addSnapshotListener
 
-                userMap.clear()
-                locationMap.clear()
+                val acceptedUids = snap.documents.mapNotNull { doc ->
+                    doc.toObject(ShareRequest::class.java)
+                        ?.takeIf { it.status == "accepted" }
+                        ?.otherUid(currentUserId)
+                }
 
-                val friendUids = snapshot.documents.map { it.id }
+                userMap.keys.retainAll(acceptedUids)
+                locationMap.keys.retainAll(acceptedUids)
 
-                friendUids.forEach { uid ->
+                acceptedUids.forEach { uid ->
                     firestore.collection("users")
                         .document(uid)
                         .addSnapshotListener { userSnap, _ ->
                             if (userSnap != null && userSnap.exists()) {
                                 userSnap.toObject(SharedUser::class.java)?.let { user ->
                                     userMap[uid] = user
-                                    // 如果已經有他的地點了，就 emit
-                                    locationMap[uid]?.let { _ -> emit(onUpdate, userMap, locationMap) }
+                                    emitSharedLocations(onUpdate, userMap, locationMap)
                                 }
                             }
                         }
+                    // 位置信息监听
                     firestore.collection("locations")
                         .document(uid)
                         .addSnapshotListener { locSnap, _ ->
@@ -77,25 +76,23 @@ class LocationRepository {
                                 val lat = locSnap.getDouble("latitude") ?: return@addSnapshotListener
                                 val lng = locSnap.getDouble("longitude") ?: return@addSnapshotListener
                                 locationMap[uid] = LatLng(lat, lng)
-                                // 如果已經有他的 user 資訊了，就 emit
-                                userMap[uid]?.let { _ -> emit(onUpdate, userMap, locationMap) }
+                                emitSharedLocations(onUpdate, userMap, locationMap)
                             }
                         }
                 }
             }
     }
 
-    private fun emit(
+    private fun emitSharedLocations(
         onUpdate: (List<SharedLocation>) -> Unit,
         userMap: Map<String, SharedUser>,
         locationMap: Map<String, LatLng>
     ) {
-        val combined = userMap.mapNotNull { (id, user) ->
-            locationMap[id]?.let { latLng ->
-                SharedLocation(user, id, latLng)
+        val combined = userMap.mapNotNull { (uid, user) ->
+            locationMap[uid]?.let { latLng ->
+                SharedLocation(uid = uid, user = user, latLng = latLng)
             }
         }
         onUpdate(combined)
     }
-
 }

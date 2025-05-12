@@ -14,16 +14,22 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.ViewModelProvider
 import com.allenchu66.geofenceapp.R
 import com.allenchu66.geofenceapp.databinding.FragmentMapBinding
+import com.allenchu66.geofenceapp.model.SharedUser
 import com.allenchu66.geofenceapp.repository.LocationRepository
+import com.allenchu66.geofenceapp.repository.SharedUserRepository
 import com.allenchu66.geofenceapp.viewModel.MapViewModel
 import com.allenchu66.geofenceapp.viewModel.MapViewModelFactory
+import com.allenchu66.geofenceapp.viewModel.SharedUserViewModel
+import com.allenchu66.geofenceapp.viewModel.SharedUserViewModelFactory
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.CustomTarget
 import com.google.android.gms.location.LocationServices
@@ -32,8 +38,8 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.firebase.auth.FirebaseAuth
-import de.hdodenhof.circleimageview.CircleImageView
 
 class MapFragment : Fragment(), OnMapReadyCallback {
 
@@ -47,6 +53,12 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     private val UPDATE_INTERVAL_MS = 60_000L
     private val handler = Handler()
     private lateinit var locationUpdateRunnable: Runnable
+
+    private lateinit var sheetBehavior: BottomSheetBehavior<LinearLayout>
+
+    private val sharedUserVM: SharedUserViewModel by activityViewModels {
+        SharedUserViewModelFactory(SharedUserRepository())
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -64,18 +76,31 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         val factory = MapViewModelFactory(repository)
         viewModel = ViewModelProvider(this, factory)[MapViewModel::class.java]
 
+        sharedUserVM.loadSharedUsers()
+
         // 初始化地圖 Fragment
         val mapFragment = childFragmentManager.findFragmentById(R.id.mapFragment) as SupportMapFragment
         mapFragment.getMapAsync(this)
 
         // 觀察共享好友位置資料
-        viewModel.sharedLocations.observe(viewLifecycleOwner) {  list ->
-            list.forEach { shared ->
+        viewModel.sharedLocations.observe(viewLifecycleOwner) {  locations ->
+
+            locations.forEach { shared ->
                 updateOrAddMarker(
                     userId   = shared.uid,
                     latLng   = shared.latLng,
                     photoUrl = shared.user.photoUri
                 )
+            }
+
+            val sharedUids = locations.map { it.uid }.toSet()
+            val iterator = markerMap.entries.iterator()
+            while (iterator.hasNext()) {
+                val (uid, marker) = iterator.next()
+                if (uid !in sharedUids) {
+                    marker.remove()
+                    iterator.remove()
+                }
             }
         }
 
@@ -88,6 +113,94 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             }
         }
         handler.post(locationUpdateRunnable)
+
+        sheetBehavior = BottomSheetBehavior.from(binding.bottomSheet)
+        sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+        binding.btnCloseSheet.setOnClickListener {
+            sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+        }
+    }
+
+    fun expandSettingsSheet(sharedUser: SharedUser) {
+        val meUid = FirebaseAuth.getInstance().currentUser?.uid
+        sheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+
+        if(sharedUser.status == "accepted"){
+            val marker = markerMap[sharedUser.uid]
+            if (marker != null) {
+                googleMap.animateCamera(
+                    CameraUpdateFactory.newLatLngZoom(marker.position, 17f)
+                )
+            }
+        }
+
+        binding.apply {
+            // Avatar
+            Glide.with(this@MapFragment)
+                .load(sharedUser.photoUri)
+                .circleCrop()
+                .into(imgUserAvatar)
+
+            // Name & Email
+            textUserName.text  = sharedUser.displayName
+            textUserEmail.text = sharedUser.email
+
+            // 先隱藏／顯示切換用 Switch
+            btnToggleShare.visibility = View.VISIBLE
+            btnDecline.visibility      = View.GONE
+            // 切換按鈕
+            when (sharedUser.status) {
+                // 1. 還在 pending
+                "pending" -> {
+                    if (sharedUser.inviter == meUid) {
+                        // 我是邀請者 → 「取消邀請」
+                        btnToggleShare.text = "取消邀請"
+                        btnToggleShare.setOnClickListener {
+                            sharedUserVM.updateShareRequestStatus(sharedUser.email, "declined")
+                        }
+                    } else {
+                        // 對方邀請我 → 顯示「接受」＋「拒絕」
+                        btnToggleShare.text = "接受邀請"
+                        btnToggleShare.setOnClickListener {
+                            sharedUserVM.updateShareRequestStatus(sharedUser.email, "accepted")
+                        }
+                        btnDecline.apply {
+                            visibility = View.VISIBLE
+                            text = "拒絕邀請"
+                            setOnClickListener {
+                                sharedUserVM.updateShareRequestStatus(sharedUser.email, "declined")
+                            }
+                        }
+                    }
+                }
+
+                // 2. 已 accepted
+                "accepted" -> {
+                    // 正在共享 → 顯示一個開關或「停止共享」按鈕
+                    btnToggleShare.text = "停止共享"
+                    btnToggleShare.setOnClickListener {
+                        sharedUserVM.updateShareRequestStatus(sharedUser.email, "declined")
+                    }
+                }
+
+                // 3. 已 declined
+                "declined" -> {
+                    // 已拒絕 → 「重新邀請」
+                    btnToggleShare.text = "重新邀請"
+                    btnToggleShare.setOnClickListener {
+                        sharedUserVM.sendShareRequest(sharedUser.email)
+                    }
+                }
+
+                else -> {
+                    // 其他 fallback
+                    btnToggleShare.text = "邀請共享"
+                    btnToggleShare.setOnClickListener {
+                        sharedUserVM.sendShareRequest(sharedUser.email)
+                    }
+                }
+            }
+        }
     }
 
     override fun onMapReady(map: GoogleMap) {

@@ -18,6 +18,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContentProviderCompat.requireContext
 import androidx.core.content.ContextCompat
+import androidx.core.view.GravityCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.findNavController
 import androidx.navigation.fragment.NavHostFragment
@@ -26,6 +27,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.allenchu66.geofenceapp.R
 import com.allenchu66.geofenceapp.adapter.SharedUserAdapter
 import com.allenchu66.geofenceapp.databinding.ActivityMainBinding
+import com.allenchu66.geofenceapp.fragment.MapFragment
 import com.allenchu66.geofenceapp.repository.SharedUserRepository
 import com.allenchu66.geofenceapp.service.LocationUpdateService
 import com.allenchu66.geofenceapp.viewModel.SharedUserViewModel
@@ -116,24 +118,16 @@ class MainActivity : AppCompatActivity() {
         navView.addView(customDrawerView)
 
         val adapter = SharedUserAdapter(emptyList()) { user ->
-            when (user.status) {
-                "pending" -> {
-                    // 接受邀請（自己被邀請的人）
-                    viewModel.updateShareStatus(user.email, "shared")
-                }
-                "waiting" -> {
-                    // 自己取消邀請對方
-                    viewModel.updateShareStatus(user.email, "cancelled")
-                }
-                "shared" -> {
-                    // 雙方停止共享
-                    viewModel.updateShareStatus(user.email, "none")
-                }
-                "declined", "cancelled", "none" -> {
-                    // 重新邀請
-                    viewModel.sendShareRequest(user.email)
-                }
-            }
+            binding.drawerLayout.closeDrawer(GravityCompat.START)
+            val navHost = supportFragmentManager
+                .findFragmentById(R.id.fragmentContainerView) as NavHostFragment
+
+            val mapFrag = navHost
+                .childFragmentManager
+                .fragments
+                .firstOrNull { it is MapFragment } as? MapFragment
+
+            mapFrag?.expandSettingsSheet(user)
         }
 
         val recyclerView = customDrawerView.findViewById<RecyclerView>(R.id.share_user_recyclerView)

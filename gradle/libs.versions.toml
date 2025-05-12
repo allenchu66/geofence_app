@@ -19,6 +19,7 @@ playServicesLocation = "21.3.0"
 imageCropper = "4.6.0"
 firebaseStorageKtx = "21.0.1"
 glide = "4.16.0"
+firebaseMessaging = "23.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -40,6 +41,7 @@ play-services-location = { group = "com.google.android.gms", name = "play-servic
 image-cropper = {group = "com.vanniktech",name = "android-image-cropper",version.ref = "imageCropper"}
 firebase-storage-ktx = { group = "com.google.firebase", name = "firebase-storage-ktx", version.ref = "firebaseStorageKtx" }
 glide = {group = "com.github.bumptech.glide",name = "glide",version.ref = "glide"}
+firebase-messaging = {group = "com.google.firebase",name = "firebase-messaging",version.ref = "firebaseMessaging"}
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

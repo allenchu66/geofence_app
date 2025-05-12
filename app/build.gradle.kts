@@ -76,4 +76,5 @@ dependencies {
 
     implementation(libs.image.cropper)
     implementation(libs.glide)
+    implementation(libs.firebase.messaging)
 }

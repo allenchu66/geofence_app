@@ -5,5 +5,6 @@ data class SharedUser(
     val email: String = "",
     val displayName: String = "",
     val photoUri: String = "",
-    val status: String = ""
+    val status: String = "",     // "pending" / "accepted" / "declined"
+    val inviter: String = ""     // 哪個 UID 發出邀請
 )

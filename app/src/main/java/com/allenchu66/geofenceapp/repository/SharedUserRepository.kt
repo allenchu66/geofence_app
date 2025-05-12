@@ -1,72 +1,101 @@
 package com.allenchu66.geofenceapp.repository
 
 import android.util.Log
+import com.allenchu66.geofenceapp.model.ShareRequest
 import com.allenchu66.geofenceapp.model.SharedUser
+import com.google.android.gms.tasks.Tasks
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentReference
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.firestore
 
 class SharedUserRepository {
     private val firestore = Firebase.firestore
-    private val auth = FirebaseAuth.getInstance()
+    val auth = FirebaseAuth.getInstance()
 
-    fun getSharedUsers(callback: (List<SharedUser>) -> Unit) {
-        val meUid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        val sharedRef = firestore
-            .collection("users").document(meUid)
-            .collection("shared_friends")
-
-        sharedRef.addSnapshotListener { snap, error ->
-            if (error != null) return@addSnapshotListener
-            if (snap == null) {
-                callback(emptyList())
-                return@addSnapshotListener
+    /** 監聽所有跟我有關的 share_requests */
+    fun listenToMyShareRequests(onResult: (List<ShareRequest>) -> Unit) {
+        val me = auth.currentUser?.uid ?: return
+        firestore.collection("share_requests")
+            .whereArrayContains("participants", me)
+            .addSnapshotListener { snaps, err ->
+                if (err != null || snaps == null) {
+                    onResult(emptyList()); return@addSnapshotListener
+                }
+                val list = snaps.documents.mapNotNull { it.toObject(ShareRequest::class.java) }
+                onResult(list)
             }
+    }
 
-            val tempList = mutableListOf<SharedUser>()
-            val total = snap.size()
-            if (total == 0) {
-                callback(emptyList()); return@addSnapshotListener
-            }
-
-            for (doc in snap.documents) {
-                val friendUid = doc.id
-                val status    = doc.getString("status").orEmpty()
-
-                firestore.collection("users")
-                    .document(friendUid)
-                    .get()
-                    .addOnSuccessListener { userDoc ->
-                        val email       = userDoc.getString("email").orEmpty()
-                        val displayName = userDoc.getString("displayName").orEmpty()
-                        val photoUri    = userDoc.getString("photoUri")
-
-                        tempList.add(
-                            SharedUser(
-                                email       = email,
-                                displayName = displayName,
-                                photoUri    = photoUri.orEmpty(),
-                                status      = status
-                            )
-                        )
-                        if (tempList.size == total) {
-                            callback(tempList)
-                        }
-                    }
-                    .addOnFailureListener {
-                        tempList.add(SharedUser(status = status))
-                        if (tempList.size == total) {
-                            callback(tempList)
-                        }
-                    }
-            }
+    fun fetchUsersForRequests(
+        requests: List<ShareRequest>,
+        onResult: (List<SharedUser>) -> Unit
+    ) {
+        val meUid = auth.currentUser?.uid ?: run {
+            onResult(emptyList()); return
         }
+        if (requests.isEmpty()) {
+            onResult(emptyList()); return
+        }
+        // 為每個請求建立一個取 user 的 Task 並記錄對應狀態
+        val tasks = requests.map { req ->
+            val otherUid = req.otherUid(meUid)
+            firestore.collection("users").document(otherUid).get()
+                .continueWith { task ->
+                    val doc = task.result!!
+                    SharedUser(
+                        uid = doc.id,
+                        email = doc.getString("email").orEmpty(),
+                        displayName = doc.getString("displayName").orEmpty(),
+                        photoUri = doc.getString("photoUri").orEmpty(),
+                        status = req.status,       // pending/accepted/declined
+                        inviter    = req.inviter
+                    )
+                }
+        }
+        @Suppress("UNCHECKED_CAST")
+        Tasks.whenAllSuccess<SharedUser>(tasks)
+            .addOnSuccessListener { users ->
+                onResult(users)
+            }
+            .addOnFailureListener {
+                onResult(emptyList())
+            }
+    }
+
+    /** 查對方的 user 資料（根據一串 UID） */
+    fun fetchUsersByUids(uids: List<String>, onResult: (List<SharedUser>) -> Unit) {
+        if (uids.isEmpty()) { onResult(emptyList()); return }
+        val tasks = uids.map { uid -> firestore.collection("users").document(uid).get() }
+        // 串接多個 get()，收齊結果
+        Tasks.whenAllSuccess<DocumentSnapshot>(tasks)
+            .addOnSuccessListener { docs ->
+                val users = docs.map { doc ->
+                    SharedUser(
+                        uid = doc.id,
+                        email = doc.getString("email").orEmpty(),
+                        displayName = doc.getString("displayName").orEmpty(),
+                        photoUri = doc.getString("photoUri").orEmpty(),
+                        status = "accepted"
+                    )
+                }
+                onResult(users)
+            }
+            .addOnFailureListener {
+                onResult(emptyList())
+            }
     }
 
 
-    fun updateShareStatusByEmail(email: String, status: String, onFinish: () -> Unit) {
+    fun updateShareRequestStatusByEmail(
+        email: String,
+        status: String,  // "pending" / "accepted" / "declined"
+        onFinish: (Boolean) -> Unit
+    ) {
         val db = FirebaseFirestore.getInstance()
         val auth = FirebaseAuth.getInstance()
         val currentUser = auth.currentUser ?: return
@@ -77,82 +106,82 @@ class SharedUserRepository {
             .get()
             .addOnSuccessListener { snapshot ->
                 if (snapshot.isEmpty) {
-                    onFinish()
+                    onFinish(false)
                     return@addOnSuccessListener
                 }
 
-                val targetDoc = snapshot.documents.first()
-                val targetUid = targetDoc.id
+                val targetUid = snapshot.documents.first().id
+                val pairId = listOf(currentUid, targetUid).sorted().joinToString("_")
 
-                val batch = db.batch()
+                val reqRef = db.collection("share_requests").document(pairId)
+                val updates = mutableMapOf<String, Any>(
+                    "status" to status
+                )
+                if (status == "accepted") {
+                    updates["acceptedAt"] = FieldValue.serverTimestamp()
+                } else if (status == "pending") {
+                    updates["invitedAt"] = FieldValue.serverTimestamp()
+                }
 
-                // 自己的 shared_friends 對對方更新
-                val selfRef = db.collection("users").document(currentUid)
-                    .collection("shared_friends").document(targetUid)
-                batch.update(selfRef, "status", status)
-
-                // 對方的 shared_friends 對自己更新
-                val targetRef = db.collection("users").document(targetUid)
-                    .collection("shared_friends").document(currentUid)
-                batch.update(targetRef, "status", status)
-
-                batch.commit()
-                    .addOnSuccessListener { onFinish() }
-                    .addOnFailureListener { onFinish() }
+                reqRef.set(updates, SetOptions.merge())
+                    .addOnSuccessListener { onFinish(true) }
+                    .addOnFailureListener { onFinish(false) }
             }
-            .addOnFailureListener { onFinish() }
+            .addOnFailureListener { onFinish(false) }
     }
 
 
-    fun sendShareRequestByEmail(email: String, onResult: (Boolean, String) -> Unit) {
-        firestore.collection("users")
+    fun sendShareRequestByEmail(
+        email: String,
+        onResult: (Boolean, String) -> Unit
+    ) {
+        val db = FirebaseFirestore.getInstance()
+        val auth = FirebaseAuth.getInstance()
+        val currentUser = auth.currentUser
+        if (currentUser == null) {
+            onResult(false, "You must be logged in.")
+            return
+        }
+        val currentUid = currentUser.uid
+        if (currentUser.email == email) {
+            onResult(false, "You can't share with yourself.")
+            return
+        }
+
+        db.collection("users")
             .whereEqualTo("email", email)
             .get()
-            .addOnSuccessListener { querySnapshot ->
-                if (querySnapshot.isEmpty) {
+            .addOnSuccessListener { query ->
+                if (query.isEmpty) {
                     onResult(false, "No user found with this email.")
                     return@addOnSuccessListener
                 }
+                val targetUid = query.documents.first().id
 
-                val targetDoc = querySnapshot.documents.first()
-                val targetUid = targetDoc.id
-                val currentUid = auth.currentUser?.uid ?: return@addOnSuccessListener
+                val pairId = listOf(currentUid, targetUid)
+                    .sorted()
+                    .joinToString("_")
 
-                if (targetUid == currentUid) {
-                    onResult(false, "You can't share with yourself.")
-                    return@addOnSuccessListener
-                }
-
-                val toTarget  = hashMapOf(
-                    "email" to auth.currentUser?.email,
-                    "status" to "waiting",
-                    "created_at" to FieldValue.serverTimestamp()
+                val requestData = mapOf(
+                    "inviter" to currentUid,
+                    "participants" to listOf(currentUid, targetUid),
+                    "status" to "pending",
+                    "invitedAt" to FieldValue.serverTimestamp()
                 )
 
-                val toSelf = hashMapOf(
-                    "email" to email,
-                    "status" to "waiting",
-                    "created_at" to FieldValue.serverTimestamp()
-                )
-
-                val batch = firestore.batch()
-
-                val targetRef = firestore.collection("users")
-                    .document(targetUid)
-                    .collection("shared_friends")
-                    .document(currentUid)
-                val selfRef = firestore.collection("users")
-                    .document(currentUid)
-                    .collection("shared_friends")
-                    .document(targetUid)
-
-                batch.set(targetRef, toTarget)
-                batch.set(selfRef, toSelf)
-
-                batch.commit()
-                    .addOnSuccessListener { onResult(true, "Invite sent.") }
-                    .addOnFailureListener { e -> onResult(false, e.message ?: "Error") }
+                db.collection("share_requests")
+                    .document(pairId)
+                    .set(requestData, SetOptions.merge())
+                    .addOnSuccessListener {
+                        onResult(true, "Invite sent.")
+                    }
+                    .addOnFailureListener { e ->
+                        onResult(false, e.message ?: "Error sending invite.")
+                    }
             }
-            .addOnFailureListener { onResult(false, it.message ?: "Error")}
+            .addOnFailureListener { e ->
+                onResult(false, e.message ?: "Error finding user.")
+            }
     }
+
 }
