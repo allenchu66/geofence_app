@@ -9,6 +9,7 @@ import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.os.Handler
+import android.os.Looper
 import android.transition.Transition
 import android.util.Log
 import android.util.StateSet
@@ -23,10 +24,13 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.ViewModelProvider
+import androidx.room.Room
 import com.allenchu66.geofenceapp.R
+import com.allenchu66.geofenceapp.database.GeofenceDatabase
 import com.allenchu66.geofenceapp.databinding.FragmentMapBinding
 import com.allenchu66.geofenceapp.model.GeofenceData
 import com.allenchu66.geofenceapp.model.SharedUser
+import com.allenchu66.geofenceapp.repository.GeofenceLocalRepository
 import com.allenchu66.geofenceapp.repository.GeofenceRepository
 import com.allenchu66.geofenceapp.repository.LocationRepository
 import com.allenchu66.geofenceapp.repository.SharedUserRepository
@@ -45,7 +49,11 @@ import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.firestore
+import com.google.firebase.messaging.FirebaseMessaging
 
 class MapFragment : Fragment(), OnMapReadyCallback {
 
@@ -94,9 +102,17 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         val factory = MapViewModelFactory(repository)
         mapViewModel = ViewModelProvider(this, factory)[MapViewModel::class.java]
 
+        val db = Room.databaseBuilder(
+            requireContext().applicationContext,
+            GeofenceDatabase::class.java,
+            "app_db"
+        ).build()
+
+        val geofenceLocalRepo = GeofenceLocalRepository(db.geofenceDao())
+
         val geofenceRepo = GeofenceRepository()
         val geofenceViewModelFactory =
-            GeofenceViewModelFactory(requireActivity().application, geofenceRepo)
+            GeofenceViewModelFactory(requireActivity().application,geofenceLocalRepo ,geofenceRepo)
         geofenceViewModel =
             ViewModelProvider(this, geofenceViewModelFactory).get(GeofenceViewModel::class.java)
 
@@ -109,7 +125,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
         // 觀察共享好友位置資料
         mapViewModel.sharedLocations.observe(viewLifecycleOwner) { locations ->
-
             locations.forEach { shared ->
                 updateOrAddMarker(
                     userId = shared.uid,
@@ -140,6 +155,20 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         handler.post(locationUpdateRunnable)
 
         sheetBehavior = BottomSheetBehavior.from(binding.bottomSheet)
+        sheetBehavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
+            override fun onStateChanged(bottomSheet: View, newState: Int) {
+                val bottomPadding = if (newState == BottomSheetBehavior.STATE_EXPANDED) {
+                    bottomSheet.height
+                } else {
+                    0
+                }
+                googleMap.setPadding(0, 0, 0, bottomPadding)
+            }
+            override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                // 也可以在滑動時跟著 slotOffset 動態更新
+                adjustMapPadding(bottomSheet, slideOffset)
+            }
+        })
         sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
         binding.btnCloseSheet.setOnClickListener {
             sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
@@ -149,7 +178,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             val fence = fences.firstOrNull()  // 挑最新那一筆
             savedGeofenceData = fence
             fence?.let {
-                binding.etGeofenceName.setText(it.name)
+                binding.etGeofenceLocationName.setText(it.locationName)
                 binding.tvLatLng.text = "Lat: %.5f, Lng: %.5f".format(it.latitude, it.longitude)
 
                 binding.sliderRadius.value = it.radius
@@ -159,6 +188,61 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 binding.chipExit.isChecked  = it.transition.contains("exit")
             }
         }
+
+        checkFirebaseMessageToken()
+
+        // 地圖就緒後載入共享好友位置
+        FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+            mapViewModel.loadSharedLocations(uid)
+            geofenceViewModel.loadIncomingGeofences()
+        }
+    }
+
+    private fun adjustMapPadding(
+        sheet: View,
+        slideOffset: Float = 1f // collapse 時 slideOffset=0, expand 時=1
+    ) {
+        val bottomPadding = (sheet.height * slideOffset).toInt()
+        googleMap.setPadding(0, 0, 0, bottomPadding)
+    }
+
+    private fun checkFirebaseMessageToken() {
+        FirebaseMessaging.getInstance().token
+            .addOnCompleteListener { task ->
+                if (!task.isSuccessful) {
+                    Log.w("FCM", "Fetching FCM token failed", task.exception)
+                    return@addOnCompleteListener
+                }
+
+                val token = task.result
+                val uid = FirebaseAuth.getInstance().currentUser?.uid
+                if (uid == null) {
+                    Log.w("FCM", "Cannot upload token: user not signed in")
+                    return@addOnCompleteListener
+                }
+
+                val db = Firebase.firestore
+                db.collection("users")
+                    .document(uid)
+                    .update("fcmToken", token)
+                    .addOnSuccessListener {
+                        Log.d("FCM", "Token successfully saved to Firestore")
+                    }
+                    .addOnFailureListener { e ->
+                        // 如果文件還不存在，也可以改用 set + merge
+                        db.collection("users")
+                            .document(uid)
+                            .set(mapOf("fcmToken" to token), SetOptions.merge())
+                            .addOnSuccessListener {
+                                Log.d("FCM", "Token saved via set/merge")
+                            }
+                            .addOnFailureListener { ex ->
+                                Log.e("FCM", "Failed to save token", ex)
+                            }
+                        Log.e("FCM", "Failed to update token field, will try set()", e)
+                    }
+            }
+
     }
 
     fun expandSettingsSheet(sharedUser: SharedUser) {
@@ -168,9 +252,11 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         if (sharedUser.status == "accepted") {
             val marker = markerMap[sharedUser.uid]
             if (marker != null) {
-                googleMap.animateCamera(
-                    CameraUpdateFactory.newLatLngZoom(marker.position, 17f)
-                )
+                Handler(Looper.getMainLooper()).postDelayed({
+                    googleMap.animateCamera(
+                        CameraUpdateFactory.newLatLngZoom(marker.position, 17f)
+                    )
+                },200)
             }
         }
 
@@ -245,7 +331,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
             binding.btnSave.setOnClickListener {
                 val nameInput =
-                    etGeofenceName.text.toString().takeIf { it.isNotBlank() } ?: "default"
+                    etGeofenceLocationName.text.toString().takeIf { it.isNotBlank() } ?: "default"
                 val center = geofenceMarker?.position
                 val radius = geofenceCircle?.radius?.toFloat() ?: DEFAULT_RADIUS
                 val transitions = mutableListOf<String>().apply {
@@ -371,11 +457,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             moveToCurrentLocation()
         }
 
-        // 地圖就緒後載入共享好友位置
-        FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
-            mapViewModel.loadSharedLocations(uid)
-            geofenceViewModel.loadIncomingGeofences()
-        }
         googleMap.setOnMarkerDragListener(geofenceDragListener)
     }
 

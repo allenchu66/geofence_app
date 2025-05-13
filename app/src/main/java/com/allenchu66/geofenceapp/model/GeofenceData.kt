@@ -7,8 +7,8 @@ data class GeofenceData(
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
     val radius: Float = 0f,
-    val name: String = "",
-    val transition: List<String> = listOf("ENTER", "EXIT"),
+    val locationName: String = "",
+    val transition: List<String> = listOf("enter", "exit"),
     val createdAt: com.google.firebase.Timestamp? = null,
     val updatedAt: com.google.firebase.Timestamp? = null
 )

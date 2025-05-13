@@ -1,6 +1,6 @@
 [versions]
 agp = "8.7.3"
-kotlin = "2.1.0"
+kotlin = "2.1.20"
 coreKtx = "1.15.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -20,6 +20,8 @@ imageCropper = "4.6.0"
 firebaseStorageKtx = "21.0.1"
 glide = "4.16.0"
 firebaseMessaging = "23.1.0"
+androidx-room = "2.5.0"
+ksp = "2.1.20-1.0.32"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -42,9 +44,14 @@ image-cropper = {group = "com.vanniktech",name = "android-image-cropper",version
 firebase-storage-ktx = { group = "com.google.firebase", name = "firebase-storage-ktx", version.ref = "firebaseStorageKtx" }
 glide = {group = "com.github.bumptech.glide",name = "glide",version.ref = "glide"}
 firebase-messaging = {group = "com.google.firebase",name = "firebase-messaging",version.ref = "firebaseMessaging"}
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "androidx-room" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "androidx-room" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "androidx-room" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 gms = { id = "com.google.gms.google-services", version.ref = "gms" }
+kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
 

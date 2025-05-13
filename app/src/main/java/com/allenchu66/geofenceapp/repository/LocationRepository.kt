@@ -42,12 +42,13 @@ class LocationRepository {
     ) {
         val userMap = mutableMapOf<String, SharedUser>()
         val locationMap = mutableMapOf<String, LatLng>()
-
+        Log.d("listenToSharedLocations","Test")
         firestore.collection("share_requests")
             .whereArrayContains("participants", currentUserId)
             .addSnapshotListener { snap, err ->
+                Log.d("listenToSharedLocations","Test1")
                 if (err != null || snap == null) return@addSnapshotListener
-
+                Log.d("listenToSharedLocations","Test2")
                 val acceptedUids = snap.documents.mapNotNull { doc ->
                     doc.toObject(ShareRequest::class.java)
                         ?.takeIf { it.status == "accepted" }
@@ -57,10 +58,12 @@ class LocationRepository {
                 userMap.keys.retainAll(acceptedUids)
                 locationMap.keys.retainAll(acceptedUids)
 
+                Log.d("listenToSharedLocations",acceptedUids.size.toString())
                 acceptedUids.forEach { uid ->
                     firestore.collection("users")
                         .document(uid)
-                        .addSnapshotListener { userSnap, _ ->
+                        .addSnapshotListener { userSnap, err ->
+                            Log.d("Repo-UserSnap", "uid=$uid exists=${userSnap?.exists()} err=$err")
                             if (userSnap != null && userSnap.exists()) {
                                 userSnap.toObject(SharedUser::class.java)?.let { user ->
                                     userMap[uid] = user
@@ -71,11 +74,13 @@ class LocationRepository {
                     // 位置信息监听
                     firestore.collection("locations")
                         .document(uid)
-                        .addSnapshotListener { locSnap, _ ->
+                        .addSnapshotListener { locSnap, error ->
+                            Log.d("Repo-LocSnap", "uid=$uid exists=${locSnap?.exists()} err=$error")
                             if (locSnap != null && locSnap.exists()) {
                                 val lat = locSnap.getDouble("latitude") ?: return@addSnapshotListener
                                 val lng = locSnap.getDouble("longitude") ?: return@addSnapshotListener
                                 locationMap[uid] = LatLng(lat, lng)
+                                Log.d("Repo-Location", "for $uid -> $lat,$lng")
                                 emitSharedLocations(onUpdate, userMap, locationMap)
                             }
                         }

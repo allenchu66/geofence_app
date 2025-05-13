@@ -8,8 +8,18 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.room.Room
+import com.allenchu66.geofenceapp.database.GeofenceDatabase
+import com.allenchu66.geofenceapp.repository.GeofenceLocalRepository
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingEvent
+import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.firestore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -18,30 +28,72 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
                 Log.e("GeofenceReceiver", "Error code: ${event.errorCode}")
                 return
             }
-            val transition = event.geofenceTransition
-            val fenceIds = event.triggeringGeofences?.map { it.requestId }
-            if (fenceIds != null) {
-                fenceIds.forEach { id ->
-                    when (transition) {
-                        Geofence.GEOFENCE_TRANSITION_ENTER -> notify(context, id, "entered")
-                        Geofence.GEOFENCE_TRANSITION_EXIT  -> notify(context, id, "exited")
-                    }
+            val transition = when (event.geofenceTransition) {
+                Geofence.GEOFENCE_TRANSITION_ENTER -> "enter"
+                Geofence.GEOFENCE_TRANSITION_EXIT  -> "exitÏ"
+                else                                -> return
+            }
+
+            val db   = Room.databaseBuilder(
+                context.applicationContext,
+               GeofenceDatabase::class.java,
+                "app_db"
+            ).build()
+            val repo = GeofenceLocalRepository(db.geofenceDao())
+
+            event.triggeringGeofences?.forEach { geofence ->
+                val fenceId = geofence.requestId
+                CoroutineScope(Dispatchers.IO).launch {
+                    // 從 Room 拿完整設定
+                    val entry = repo.get(fenceId) ?: return@launch
+
+                    // 3a. 本地通知（保留）
+                    notifyLocal(context, fenceId, transition)
+
+                    // 3b. 上報到 Firestore，使用 entry.ownerUid、entry.targetUid
+                    reportEventToFirestore(
+                        ownerUid   = entry.ownerUid,
+                        triggerUid = entry.targetUid,
+                        fenceId    = fenceId,
+                        locationName       = entry.locationName,
+                        action     = transition
+                    )
                 }
             }
         }
     }
 
-    private fun notify(context: Context, fenceId: String, action: String) {
-        Log.e("GeofenceReceiver", "action: ${action}")
+
+
+    private fun reportEventToFirestore(
+        ownerUid: String,
+        triggerUid: String,
+        fenceId:   String,
+        locationName: String,
+        action:    String
+    ) {
+        val db = Firebase.firestore
+        db.collection("geofence_events")
+            .document(ownerUid)
+            .collection("events")
+            .add(mapOf(
+                "triggerUid" to triggerUid,
+                "fenceId"    to fenceId,
+                "locationName" to locationName,
+                "action"     to action,
+                "timestamp"  to FieldValue.serverTimestamp()
+            ))
+            .addOnSuccessListener { Log.d("GeofenceReceiver", "上拋成功") }
+            .addOnFailureListener { e -> Log.e("GeofenceReceiver", "上拋失敗", e) }
+    }
+
+    private fun notifyLocal(context: Context, fenceId: String, action: String) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "geofence_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Geofence Alerts",
-                NotificationManager.IMPORTANCE_HIGH
+            nm.createNotificationChannel(
+                NotificationChannel(channelId, "Geofence Alerts", NotificationManager.IMPORTANCE_HIGH)
             )
-            nm.createNotificationChannel(channel)
         }
         val notif = NotificationCompat.Builder(context, channelId)
             .setContentTitle("Geofence $action")

@@ -159,10 +159,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         val currentUser = FirebaseAuth.getInstance().currentUser
+
+        tvUserEmail = customDrawerView.findViewById<TextView>(R.id.drawer_user_email)
+        tvUserNickname = customDrawerView.findViewById<TextView>(R.id.drawer_user_nickname)
+        imageUserPhoto = customDrawerView.findViewById<ImageView>(R.id.drawer_user_photo)
+
         if (currentUser != null) {
-           tvUserEmail = customDrawerView.findViewById<TextView>(R.id.drawer_user_email)
-           tvUserNickname = customDrawerView.findViewById<TextView>(R.id.drawer_user_nickname)
-           imageUserPhoto = customDrawerView.findViewById<ImageView>(R.id.drawer_user_photo)
            updateProfileUI(currentUser)
         }
     }

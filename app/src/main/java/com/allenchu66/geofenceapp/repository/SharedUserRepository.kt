@@ -17,6 +17,11 @@ class SharedUserRepository {
     private val firestore = Firebase.firestore
     val auth = FirebaseAuth.getInstance()
 
+    private fun pairId(uid1: String, uid2: String) =
+        listOf(uid1, uid2)
+            .sorted()
+            .joinToString("_")
+
     /** 監聽所有跟我有關的 share_requests */
     fun listenToMyShareRequests(onResult: (List<ShareRequest>) -> Unit) {
         val me = auth.currentUser?.uid ?: return
@@ -111,7 +116,7 @@ class SharedUserRepository {
                 }
 
                 val targetUid = snapshot.documents.first().id
-                val pairId = listOf(currentUid, targetUid).sorted().joinToString("_")
+                val pairId = pairId(currentUid, targetUid)
 
                 val reqRef = db.collection("share_requests").document(pairId)
                 val updates = mutableMapOf<String, Any>(
@@ -139,12 +144,12 @@ class SharedUserRepository {
         val auth = FirebaseAuth.getInstance()
         val currentUser = auth.currentUser
         if (currentUser == null) {
-            onResult(false, "You must be logged in.")
+            onResult(false, "您尚未登入 請先登入！")
             return
         }
         val currentUid = currentUser.uid
         if (currentUser.email == email) {
-            onResult(false, "You can't share with yourself.")
+            onResult(false, "您不能跟自己分享")
             return
         }
 
@@ -158,9 +163,7 @@ class SharedUserRepository {
                 }
                 val targetUid = query.documents.first().id
 
-                val pairId = listOf(currentUid, targetUid)
-                    .sorted()
-                    .joinToString("_")
+                val pid = pairId(currentUid, targetUid)
 
                 val requestData = mapOf(
                     "inviter" to currentUid,
@@ -170,17 +173,17 @@ class SharedUserRepository {
                 )
 
                 db.collection("share_requests")
-                    .document(pairId)
+                    .document(pid)
                     .set(requestData, SetOptions.merge())
                     .addOnSuccessListener {
-                        onResult(true, "Invite sent.")
+                        onResult(true, "已發送邀請")
                     }
                     .addOnFailureListener { e ->
-                        onResult(false, e.message ?: "Error sending invite.")
+                        onResult(false, e.message ?: "邀請時發生錯誤")
                     }
             }
             .addOnFailureListener { e ->
-                onResult(false, e.message ?: "Error finding user.")
+                onResult(false, e.message ?: "找不到使用者")
             }
     }
 

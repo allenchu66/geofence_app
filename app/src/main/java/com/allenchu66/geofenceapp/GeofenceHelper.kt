@@ -6,11 +6,15 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.allenchu66.geofenceapp.model.GeofenceData
+import com.allenchu66.geofenceapp.repository.GeofenceLocalRepository
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
-class GeofenceHelper(private val context: Context) {
+class GeofenceHelper(private val context: Context,private val repo: GeofenceLocalRepository) {
     private val geofencingClient = LocationServices.getGeofencingClient(context)
 
     private val geofencePendingIntent: PendingIntent by lazy {
@@ -55,6 +59,7 @@ class GeofenceHelper(private val context: Context) {
         geofencingClient.addGeofences(request, geofencePendingIntent)
             .addOnSuccessListener {
                 Log.d("GeofenceHelper", "Added fence ${entry.fenceId}")
+                CoroutineScope(Dispatchers.IO).launch { repo.save(entry) }
             }
             .addOnFailureListener { e ->
                 Log.e("GeofenceHelper", "Failed to add fence: $e")
@@ -64,6 +69,7 @@ class GeofenceHelper(private val context: Context) {
 
     fun removeAllGeofences() {
         geofencingClient.removeGeofences(geofencePendingIntent)
+        CoroutineScope(Dispatchers.IO).launch {repo.deleteAll() }
     }
 
     fun removeGeofence(fenceId: String) {
