@@ -5,11 +5,13 @@ import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.os.Handler
 import android.transition.Transition
 import android.util.Log
+import android.util.StateSet
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -23,9 +25,13 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.ViewModelProvider
 import com.allenchu66.geofenceapp.R
 import com.allenchu66.geofenceapp.databinding.FragmentMapBinding
+import com.allenchu66.geofenceapp.model.GeofenceData
 import com.allenchu66.geofenceapp.model.SharedUser
+import com.allenchu66.geofenceapp.repository.GeofenceRepository
 import com.allenchu66.geofenceapp.repository.LocationRepository
 import com.allenchu66.geofenceapp.repository.SharedUserRepository
+import com.allenchu66.geofenceapp.viewModel.GeofenceViewModel
+import com.allenchu66.geofenceapp.viewModel.GeofenceViewModelFactory
 import com.allenchu66.geofenceapp.viewModel.MapViewModel
 import com.allenchu66.geofenceapp.viewModel.MapViewModelFactory
 import com.allenchu66.geofenceapp.viewModel.SharedUserViewModel
@@ -43,10 +49,17 @@ import com.google.firebase.auth.FirebaseAuth
 
 class MapFragment : Fragment(), OnMapReadyCallback {
 
+    companion object {
+        private const val DEFAULT_RADIUS = 30f
+    }
+
     private var _binding: FragmentMapBinding? = null
     private val binding get() = _binding!!
     private lateinit var googleMap: GoogleMap
-    private lateinit var viewModel: MapViewModel
+    private lateinit var mapViewModel: MapViewModel
+
+    private lateinit var geofenceViewModel: GeofenceViewModel
+
     private val markerMap = mutableMapOf<String, Marker>()
 
     private val LOCATION_PERMISSION_REQUEST_CODE = 1001
@@ -55,6 +68,11 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     private lateinit var locationUpdateRunnable: Runnable
 
     private lateinit var sheetBehavior: BottomSheetBehavior<LinearLayout>
+
+    private var savedGeofenceData: GeofenceData? = null
+
+    private var geofenceMarker: Marker? = null
+    private var geofenceCircle: Circle? = null
 
     private val sharedUserVM: SharedUserViewModel by activityViewModels {
         SharedUserViewModelFactory(SharedUserRepository())
@@ -74,21 +92,28 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         // 初始化 ViewModel
         val repository = LocationRepository()
         val factory = MapViewModelFactory(repository)
-        viewModel = ViewModelProvider(this, factory)[MapViewModel::class.java]
+        mapViewModel = ViewModelProvider(this, factory)[MapViewModel::class.java]
+
+        val geofenceRepo = GeofenceRepository()
+        val geofenceViewModelFactory =
+            GeofenceViewModelFactory(requireActivity().application, geofenceRepo)
+        geofenceViewModel =
+            ViewModelProvider(this, geofenceViewModelFactory).get(GeofenceViewModel::class.java)
 
         sharedUserVM.loadSharedUsers()
 
         // 初始化地圖 Fragment
-        val mapFragment = childFragmentManager.findFragmentById(R.id.mapFragment) as SupportMapFragment
+        val mapFragment =
+            childFragmentManager.findFragmentById(R.id.mapFragment) as SupportMapFragment
         mapFragment.getMapAsync(this)
 
         // 觀察共享好友位置資料
-        viewModel.sharedLocations.observe(viewLifecycleOwner) {  locations ->
+        mapViewModel.sharedLocations.observe(viewLifecycleOwner) { locations ->
 
             locations.forEach { shared ->
                 updateOrAddMarker(
-                    userId   = shared.uid,
-                    latLng   = shared.latLng,
+                    userId = shared.uid,
+                    latLng = shared.latLng,
                     photoUrl = shared.user.photoUri
                 )
             }
@@ -119,13 +144,28 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         binding.btnCloseSheet.setOnClickListener {
             sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
         }
+
+        geofenceViewModel.ownerGeofences.observe(viewLifecycleOwner) { fences ->
+            val fence = fences.firstOrNull()  // 挑最新那一筆
+            savedGeofenceData = fence
+            fence?.let {
+                binding.etGeofenceName.setText(it.name)
+                binding.tvLatLng.text = "Lat: %.5f, Lng: %.5f".format(it.latitude, it.longitude)
+
+                binding.sliderRadius.value = it.radius
+                binding.tvGeofenceRadius.text = "${it.radius} m"
+
+                binding.chipEnter.isChecked = it.transition.contains("enter")
+                binding.chipExit.isChecked  = it.transition.contains("exit")
+            }
+        }
     }
 
     fun expandSettingsSheet(sharedUser: SharedUser) {
         val meUid = FirebaseAuth.getInstance().currentUser?.uid
         sheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
 
-        if(sharedUser.status == "accepted"){
+        if (sharedUser.status == "accepted") {
             val marker = markerMap[sharedUser.uid]
             if (marker != null) {
                 googleMap.animateCamera(
@@ -133,6 +173,8 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 )
             }
         }
+
+        geofenceViewModel.loadOwnerGeofencesForTarget(sharedUser.uid)
 
         binding.apply {
             // Avatar
@@ -142,12 +184,12 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 .into(imgUserAvatar)
 
             // Name & Email
-            textUserName.text  = sharedUser.displayName
+            textUserName.text = sharedUser.displayName
             textUserEmail.text = sharedUser.email
 
             // 先隱藏／顯示切換用 Switch
             btnToggleShare.visibility = View.VISIBLE
-            btnDecline.visibility      = View.GONE
+            btnDecline.visibility = View.GONE
             // 切換按鈕
             when (sharedUser.status) {
                 // 1. 還在 pending
@@ -200,17 +242,125 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     }
                 }
             }
+
+            binding.btnSave.setOnClickListener {
+                val nameInput =
+                    etGeofenceName.text.toString().takeIf { it.isNotBlank() } ?: "default"
+                val center = geofenceMarker?.position
+                val radius = geofenceCircle?.radius?.toFloat() ?: DEFAULT_RADIUS
+                val transitions = mutableListOf<String>().apply {
+                    if (chipEnter.isChecked) add("enter")
+                    if (chipExit.isChecked) add("exit")
+                }
+                if (center == null) {
+                    Toast.makeText(requireContext(), "請先在地圖上選擇一個範圍", Toast.LENGTH_SHORT)
+                        .show()
+                    return@setOnClickListener
+                }
+
+                if (transitions.isEmpty()) {
+                    Toast.makeText(
+                        requireContext(),
+                        "請至少選擇 進入 或 離開 觸發事件",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@setOnClickListener
+                }
+
+                geofenceViewModel.uploadGeofence(
+                    targetUid = sharedUser.uid,
+                    lat = center.latitude,
+                    lng = center.longitude,
+                    radius = radius,
+                    name = nameInput,                      // 或從 UI 取得
+                    transition = transitions     // 或從 UI 取得
+                )
+            }
+
+            binding.btnEditGeofence.setOnClickListener {
+                val marker = markerMap[sharedUser.uid]
+                val center = savedGeofenceData
+                    ?.let { LatLng(it.latitude, it.longitude) }
+                    ?: marker?.position
+                val radius = savedGeofenceData?.radius ?: DEFAULT_RADIUS
+                if (center != null) {
+                    addOrResetGeofence(center, radius)
+                    binding.tvLatLng.text =
+                        "Lat: %.5f, Lng: %.5f".format(center.latitude, center.longitude)
+                }
+            }
+
+            binding.sliderRadius.addOnChangeListener { _, value, _ ->
+                updateCircleRadius(value.toDouble())
+            }
         }
     }
+
+    private val geofenceDragListener = object : GoogleMap.OnMarkerDragListener {
+        override fun onMarkerDragStart(marker: Marker) = Unit
+        override fun onMarkerDrag(marker: Marker) {
+            if (marker == geofenceMarker) {
+                geofenceCircle?.center = marker.position
+                binding.tvLatLng.text =
+                    "Lat: %.5f, Lng: %.5f".format(
+                        marker.position.latitude,
+                        marker.position.longitude
+                    )
+            }
+        }
+
+        override fun onMarkerDragEnd(marker: Marker) {
+            if (marker == geofenceMarker) {
+                geofenceCircle?.center = marker.position
+            }
+        }
+    }
+
+
+    private fun addOrResetGeofence(center: LatLng, radius: Float) {
+        // 移除舊的
+        geofenceMarker?.remove()
+        geofenceCircle?.remove()
+
+        // 新增 marker（可拖放）
+        geofenceMarker = googleMap.addMarker(
+            MarkerOptions()
+                .position(center)
+                .draggable(true)
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+        )
+
+        // 新增 circle
+        geofenceCircle = googleMap.addCircle(
+            CircleOptions()
+                .center(center)
+                .radius(radius.toDouble())
+                .strokeWidth(2f)
+                .strokeColor(Color.parseColor("#EA0000"))
+                .fillColor(Color.parseColor("#4DFF7575"))
+        )
+    }
+
+    private fun updateCircleRadius(radius: Double) {
+        geofenceCircle?.radius = radius
+        binding.tvGeofenceRadius.text = "${radius} m"
+    }
+
 
     override fun onMapReady(map: GoogleMap) {
         googleMap = map
 
         googleMap.uiSettings.isMyLocationButtonEnabled = true
         googleMap.uiSettings.isZoomControlsEnabled = true
+        googleMap.isBuildingsEnabled = false
 
-        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
-            != PackageManager.PERMISSION_GRANTED) {
+
+        if (ContextCompat.checkSelfPermission(
+                requireContext(),
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+            != PackageManager.PERMISSION_GRANTED
+        ) {
             ActivityCompat.requestPermissions(
                 requireActivity(),
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
@@ -223,8 +373,10 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
         // 地圖就緒後載入共享好友位置
         FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
-            viewModel.loadSharedLocations(uid)
+            mapViewModel.loadSharedLocations(uid)
+            geofenceViewModel.loadIncomingGeofences()
         }
+        googleMap.setOnMarkerDragListener(geofenceDragListener)
     }
 
     // 定位並移動視角到自己位置
@@ -238,14 +390,20 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     val latLng = LatLng(location.latitude, location.longitude)
                     googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 16f))
                     FirebaseAuth.getInstance().currentUser?.uid?.let { userId ->
-                        viewModel.updateLocationToFirestore(userId, latLng.latitude, latLng.longitude)
+                        mapViewModel.updateLocationToFirestore(
+                            userId,
+                            latLng.latitude,
+                            latLng.longitude
+                        )
                     }
                 } else {
-                    Toast.makeText(requireContext(), "Unable to get location", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "Unable to get location", Toast.LENGTH_SHORT)
+                        .show()
                 }
             }
             .addOnFailureListener { e ->
-                Toast.makeText(requireContext(), "Location error: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "Location error: ${e.message}", Toast.LENGTH_SHORT)
+                    .show()
             }
     }
 
@@ -255,8 +413,13 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity())
         fusedLocationClient.lastLocation.addOnSuccessListener { location ->
             if (location != null) {
-                val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return@addOnSuccessListener
-                viewModel.updateLocationToFirestore(userId, location.latitude, location.longitude)
+                val userId =
+                    FirebaseAuth.getInstance().currentUser?.uid ?: return@addOnSuccessListener
+                mapViewModel.updateLocationToFirestore(
+                    userId,
+                    location.latitude,
+                    location.longitude
+                )
             }
         }
     }
@@ -341,7 +504,8 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     moveToCurrentLocation()
                 }
             } else {
-                Toast.makeText(requireContext(), "Location permission denied", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "Location permission denied", Toast.LENGTH_SHORT)
+                    .show()
             }
         }
     }
