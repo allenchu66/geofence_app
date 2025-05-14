@@ -22,15 +22,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
+    private val TAG = "GeofenceReceiver"
     override fun onReceive(context: Context, intent: Intent) {
         GeofencingEvent.fromIntent(intent)?.let { event ->
             if (event.hasError()) {
-                Log.e("GeofenceReceiver", "Error code: ${event.errorCode}")
+                Log.e(TAG, "Error code: ${event.errorCode}")
                 return
             }
             val transition = when (event.geofenceTransition) {
                 Geofence.GEOFENCE_TRANSITION_ENTER -> "enter"
-                Geofence.GEOFENCE_TRANSITION_EXIT  -> "exitÏ"
+                Geofence.GEOFENCE_TRANSITION_EXIT  -> "exit"
                 else                                -> return
             }
 
@@ -48,12 +49,15 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
                     val entry = repo.get(fenceId) ?: return@launch
 
                     // 3a. 本地通知（保留）
-                    notifyLocal(context, fenceId, transition)
+                    //notifyLocal(context, fenceId, transition)
+
+                    Log.d(TAG,"ownerUid:${entry.ownerUid}")
+                    Log.d(TAG,"targetUid:${entry.targetUid}")
 
                     // 3b. 上報到 Firestore，使用 entry.ownerUid、entry.targetUid
                     reportEventToFirestore(
                         ownerUid   = entry.ownerUid,
-                        triggerUid = entry.targetUid,
+                        targetUid = entry.targetUid,
                         fenceId    = fenceId,
                         locationName       = entry.locationName,
                         action     = transition
@@ -64,10 +68,13 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
     }
 
 
-
+    /**
+     * ownerUid : 偵測Geofence的人
+     * targetUid : 要被發送通知的人
+     * */
     private fun reportEventToFirestore(
         ownerUid: String,
-        triggerUid: String,
+        targetUid: String,
         fenceId:   String,
         locationName: String,
         action:    String
@@ -77,7 +84,7 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
             .document(ownerUid)
             .collection("events")
             .add(mapOf(
-                "triggerUid" to triggerUid,
+                "targetUid" to targetUid,
                 "fenceId"    to fenceId,
                 "locationName" to locationName,
                 "action"     to action,

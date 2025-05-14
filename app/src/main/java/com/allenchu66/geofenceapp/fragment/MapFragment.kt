@@ -49,6 +49,7 @@ import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.chip.Chip
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.SetOptions
@@ -112,7 +113,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
         val geofenceRepo = GeofenceRepository()
         val geofenceViewModelFactory =
-            GeofenceViewModelFactory(requireActivity().application,geofenceLocalRepo ,geofenceRepo)
+            GeofenceViewModelFactory(requireActivity().application, geofenceLocalRepo, geofenceRepo)
         geofenceViewModel =
             ViewModelProvider(this, geofenceViewModelFactory).get(GeofenceViewModel::class.java)
 
@@ -164,6 +165,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 }
                 googleMap.setPadding(0, 0, 0, bottomPadding)
             }
+
             override fun onSlide(bottomSheet: View, slideOffset: Float) {
                 // 也可以在滑動時跟著 slotOffset 動態更新
                 adjustMapPadding(bottomSheet, slideOffset)
@@ -175,18 +177,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         }
 
         geofenceViewModel.ownerGeofences.observe(viewLifecycleOwner) { fences ->
-            val fence = fences.firstOrNull()  // 挑最新那一筆
-            savedGeofenceData = fence
-            fence?.let {
-                binding.etGeofenceLocationName.setText(it.locationName)
-                binding.tvLatLng.text = "Lat: %.5f, Lng: %.5f".format(it.latitude, it.longitude)
-
-                binding.sliderRadius.value = it.radius
-                binding.tvGeofenceRadius.text = "${it.radius} m"
-
-                binding.chipEnter.isChecked = it.transition.contains("enter")
-                binding.chipExit.isChecked  = it.transition.contains("exit")
-            }
+            loadGeofenceChips(fences)
         }
 
         checkFirebaseMessageToken()
@@ -196,6 +187,92 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             mapViewModel.loadSharedLocations(uid)
             geofenceViewModel.loadIncomingGeofences()
         }
+    }
+
+    private fun loadGeofenceChips(geofences: List<GeofenceData>) {
+        binding.chipGroupGeofences.removeAllViews()
+        if (geofences.isEmpty()) {
+            binding.layoutGeofenceConfig.visibility = View.GONE
+            binding.btnAddGeofence.visibility = View.VISIBLE
+        } else {
+            binding.layoutGeofenceConfig.visibility = View.VISIBLE
+            binding.btnAddGeofence.visibility = View.GONE
+            geofences.forEachIndexed { index, geofence ->
+                val chip = layoutInflater.inflate(
+                    R.layout.custom_chip,
+                    binding.chipGroupGeofences,
+                    false
+                ) as Chip
+                chip.text = geofence.locationName
+                chip.id = View.generateViewId()
+                chip.isCheckable = true
+
+                // 預設選取第一個 Chip
+                if (index == 0) {
+                    chip.isChecked = true
+                    displayGeofenceDetails(geofence)
+                }
+
+                chip.setOnClickListener {
+                    displayGeofenceDetails(geofence)
+                }
+
+                binding.chipGroupGeofences.addView(chip)
+            }
+            // 在最後新增 "+" Chip
+            val addChip = layoutInflater.inflate(
+                R.layout.custom_chip,
+                binding.chipGroupGeofences,
+                false
+            ) as Chip
+            addChip.text = "+"
+            addChip.id = View.generateViewId()
+            addChip.isCheckable = false  // 不需要選取狀態
+            addChip.setChipIconResource(R.drawable.ic_add)  // 可搭配icon（可選）
+            addChip.setOnClickListener {
+                createNewGeofence()
+            }
+            binding.chipGroupGeofences.addView(addChip)
+        }
+    }
+
+    fun createNewGeofence() {
+        binding.layoutGeofenceConfig.visibility = View.VISIBLE
+        binding.btnAddGeofence.visibility = View.GONE
+        // 清空現有輸入區，並初始化地圖上的 Geofence 標記
+        savedGeofenceData = null
+        binding.etGeofenceLocationName.setText("")
+        binding.tvLatLng.text = "緯度: -- , 經度: --"
+        binding.sliderRadius.value = DEFAULT_RADIUS
+        binding.tvGeofenceRadius.text = "${DEFAULT_RADIUS.toInt()} m"
+        binding.chipEnter.isChecked = true
+        binding.chipExit.isChecked = true
+
+        binding.btnEditGeofence.performClick()
+
+        Toast.makeText(requireContext(), "請設定新 Geofence 的位置", Toast.LENGTH_SHORT).show()
+        updateMapPaddingToBottomSheet()
+    }
+
+
+    private fun updateMapPaddingToBottomSheet() {
+        binding.bottomSheet.post {
+            googleMap.setPadding(0, 0, 0, binding.bottomSheet.height)
+        }
+    }
+
+    fun displayGeofenceDetails(geofence: GeofenceData) {
+        savedGeofenceData = geofence
+        binding.etGeofenceLocationName.setText(geofence.locationName)
+        binding.tvLatLng.text = "緯度: ${geofence.latitude}, 經度: ${geofence.longitude}"
+        binding.sliderRadius.value = geofence.radius
+        binding.tvGeofenceRadius.text = "${geofence.radius.toInt()} m"
+
+        // 更新Chip狀態
+        binding.chipEnter.isChecked = geofence.transition.contains("enter")
+        binding.chipExit.isChecked = geofence.transition.contains("exit")
+
+        // TODO: 更新地圖顯示
     }
 
     private fun adjustMapPadding(
@@ -220,6 +297,8 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     Log.w("FCM", "Cannot upload token: user not signed in")
                     return@addOnCompleteListener
                 }
+
+                Log.d("FCM", "Token:"+token)
 
                 val db = Firebase.firestore
                 db.collection("users")
@@ -256,11 +335,11 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     googleMap.animateCamera(
                         CameraUpdateFactory.newLatLngZoom(marker.position, 17f)
                     )
-                },200)
+                }, 200)
             }
         }
 
-        geofenceViewModel.loadOwnerGeofencesForTarget(sharedUser.uid)
+        geofenceViewModel.loadGeofencesSetByMe(sharedUser.uid)
 
         binding.apply {
             // Avatar
@@ -329,7 +408,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 }
             }
 
-            binding.btnSave.setOnClickListener {
+            btnSave.setOnClickListener {
                 val nameInput =
                     etGeofenceLocationName.text.toString().takeIf { it.isNotBlank() } ?: "default"
                 val center = geofenceMarker?.position
@@ -354,7 +433,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 }
 
                 geofenceViewModel.uploadGeofence(
-                    targetUid = sharedUser.uid,
+                    ownerUid = sharedUser.uid,
                     lat = center.latitude,
                     lng = center.longitude,
                     radius = radius,
@@ -363,7 +442,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 )
             }
 
-            binding.btnEditGeofence.setOnClickListener {
+            btnEditGeofence.setOnClickListener {
                 val marker = markerMap[sharedUser.uid]
                 val center = savedGeofenceData
                     ?.let { LatLng(it.latitude, it.longitude) }
@@ -371,13 +450,16 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 val radius = savedGeofenceData?.radius ?: DEFAULT_RADIUS
                 if (center != null) {
                     addOrResetGeofence(center, radius)
-                    binding.tvLatLng.text =
+                    tvLatLng.text =
                         "Lat: %.5f, Lng: %.5f".format(center.latitude, center.longitude)
                 }
             }
 
-            binding.sliderRadius.addOnChangeListener { _, value, _ ->
+            sliderRadius.addOnChangeListener { _, value, _ ->
                 updateCircleRadius(value.toDouble())
+            }
+            btnAddGeofence.setOnClickListener {
+                createNewGeofence()
             }
         }
     }

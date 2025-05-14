@@ -2,10 +2,12 @@ package com.allenchu66.geofenceapp.activity
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.util.Log
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
@@ -20,6 +22,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContentProviderCompat.requireContext
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.findNavController
 import androidx.navigation.fragment.NavHostFragment
@@ -61,16 +66,22 @@ class MainActivity : AppCompatActivity() {
             val photoUri = user.photoUrl
 
             if (photoUri != null) {
-                Glide.with(this)
-                    .load(photoUri)
-                    .circleCrop()
-                    .placeholder(R.drawable.ic_default_avatar)
-                    .error(R.drawable.ic_default_avatar)
-                    .into(imageUserPhoto)
+                loadUserPhotoInto(imageUserPhoto, photoUri)
+                loadUserPhotoInto(binding.btnOpenDrawer, photoUri)
             } else {
                 imageUserPhoto.setImageResource(R.drawable.ic_default_avatar)
+                binding.btnOpenDrawer.setImageResource(R.drawable.ic_default_avatar)
             }
         }
+    }
+
+    private fun loadUserPhotoInto(target: ImageView, photoUri: Uri?) {
+        Glide.with(this)
+            .load(photoUri)
+            .circleCrop()
+            .placeholder(R.drawable.ic_default_avatar)
+            .error(R.drawable.ic_default_avatar)
+            .into(target)
     }
 
     private val locationPermissionLauncher = registerForActivityResult(
@@ -87,9 +98,11 @@ class MainActivity : AppCompatActivity() {
 
         auth = FirebaseAuth.getInstance()
         initViewModel()
-        setupToolbarAndDrawer()
+        setupDrawer()
         navigateIfLoggedIn()
         requestLocationPermissions()
+
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN);
     }
 
     private fun initViewModel(){
@@ -100,18 +113,20 @@ class MainActivity : AppCompatActivity() {
         viewModel.loadSharedUsers()
     }
 
-    private fun setupToolbarAndDrawer() {
-        setSupportActionBar(binding.toolbar)
-
+    private fun setupDrawer() {
         drawerToggle = ActionBarDrawerToggle(
             this,
             binding.drawerLayout,
-            binding.toolbar,
+            null,
             R.string.drawer_open,
             R.string.drawer_close
         )
         binding.drawerLayout.addDrawerListener(drawerToggle)
         drawerToggle.syncState()
+
+        binding.btnOpenDrawer.setOnClickListener {
+            binding.drawerLayout.openDrawer(GravityCompat.START)
+        }
 
         val navView = binding.navView
         val customDrawerView = layoutInflater.inflate(R.layout.drawer_content, navView, false)
@@ -166,6 +181,14 @@ class MainActivity : AppCompatActivity() {
 
         if (currentUser != null) {
            updateProfileUI(currentUser)
+        }
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.navView) { v, insets ->
+            val statusBarHeight = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            // 這裡把 paddingTop 設成 statusBarHeight，讓整塊 navView 往下推
+            v.setPadding(v.paddingLeft, 0, v.paddingRight, v.paddingBottom)
+            // 回傳 insets 代表「我還沒消耗其他 inset」
+            insets
         }
     }
 

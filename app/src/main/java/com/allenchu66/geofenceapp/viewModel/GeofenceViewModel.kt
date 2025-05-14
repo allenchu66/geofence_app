@@ -2,6 +2,7 @@ package com.allenchu66.geofenceapp.viewModel
 
 import android.app.Application
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -19,6 +20,8 @@ class GeofenceViewModel(
     private val localRepo: GeofenceLocalRepository,
     private val remoRepository: GeofenceRepository) : AndroidViewModel(application) {
 
+    private val TAG = "GeofenceViewModel"
+
     private val helper = GeofenceHelper(application,localRepo)
     private val firestore = Firebase.firestore
 
@@ -30,56 +33,52 @@ class GeofenceViewModel(
     private val _incomingGeofences = MutableLiveData<List<GeofenceData>>()
     val incomingGeofences: LiveData<List<GeofenceData>> = _incomingGeofences
 
-    fun loadOwnerGeofencesForTarget(targetUid: String) {
+    fun loadGeofencesSetByMe(targetUid: String) {
         val owner = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        remoRepository.getOwnerGeofences(owner, targetUid)
+        Log.d(TAG,targetUid+"   "+owner)
+        remoRepository.getGeofencesSetByMe(needNotifyUid = owner, needDetectUid = targetUid)
             .addOnSuccessListener { snap ->
                 val list = snap.documents
                     .mapNotNull { it.toObject(GeofenceData::class.java) }
                 _ownerGeofences.postValue(list)
-            }
-    }
-
-    // 讀取並顯示 owner 設定的所有 Geofence
-    fun loadOwnerGeofences() {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        remoRepository.getOwnerGeofences(uid)
-            .addOnSuccessListener { snapshot ->
-                val list = snapshot.documents.mapNotNull { it.toObject(GeofenceData::class.java) }
-                _ownerGeofences.postValue(list)
+                Log.d(TAG,list.size.toString())
+            }.addOnFailureListener { e ->
+                Log.e(TAG, "Error fetching geofences: ", e)
             }
     }
 
     // 讀取並註冊所有針對 currentUser 的 Geofence
     fun loadIncomingGeofences() {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        Log.d("Geofence","test1")
         helper.removeAllGeofences()
         remoRepository.getIncomingGeofences(uid)
             .addOnSuccessListener { snapshot ->
-                Log.d("Geofence","test2")
                 val list = snapshot.documents.mapNotNull { it.toObject(GeofenceData::class.java) }
                 _incomingGeofences.postValue(list)
                 // 在本機註冊
                 list.forEach { helper.addGeofence(it) }
             }.addOnFailureListener { e ->
-                Log.e("Geofence","test2: failed to load incoming geofences", e)
+                Log.e(TAG,"failed to load incoming geofences", e)
             }
             .addOnCompleteListener {
-                Log.d("Geofence","test2: complete, success=${it.isSuccessful}")
+                Log.d(TAG,"test2: complete, success=${it.isSuccessful}")
             }
     }
 
-    fun uploadGeofence(targetUid: String, lat: Double, lng: Double, radius: Float, name: String, transition: List<String>) {
-        val owner = FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+
+    //OwnerUid => 要觸發Geofence的Uid
+    //TargetUid => 要接收通知的Uid
+    fun uploadGeofence(ownerUid: String, lat: Double, lng: Double, radius: Float, name: String, transition: List<String>) {
+        val targetUid = FirebaseAuth.getInstance().currentUser?.uid ?: return //發送通知的目標
         val docRef = firestore.collection("users")
-            .document(owner)
+            .document(ownerUid)
             .collection("geofences")
             .document()
         val fenceId = docRef.id
         val entry = GeofenceData(
             fenceId = fenceId,
-            ownerUid = owner,
+            ownerUid = ownerUid,
             targetUid = targetUid,
             latitude = lat,
             longitude = lng,
@@ -89,16 +88,12 @@ class GeofenceViewModel(
             createdAt = null,
             updatedAt = null
         )
-        remoRepository.saveGeofence(entry)
-    }
-
-    // Owner 移除 Geofence
-    fun removeFence(fenceId: String) {
-        val owner = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        remoRepository.deleteGeofence(owner, fenceId)
-            .addOnSuccessListener {
-                helper.removeGeofence(fenceId)
-                loadOwnerGeofences()
-            }
+        Log.d("uploadGeofence","要觸發Geofence 的UID ${ownerUid}")
+        Log.d("uploadGeofence","要接收通知 的UID ${targetUid}")
+        remoRepository.saveGeofence(entry).addOnSuccessListener {
+            Toast.makeText(getApplication(), "Geofence新增成功", Toast.LENGTH_SHORT).show()
+        }.addOnFailureListener { e ->
+            Toast.makeText(getApplication(), "Geofence新增失敗: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 }

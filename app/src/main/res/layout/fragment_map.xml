@@ -89,11 +89,32 @@
             android:alpha="0.12"
             android:background="?attr/colorOnSurface" />
 
-        <!-- Geofence Config Section -->
-        <ScrollView
+        <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:fillViewport="true">
+            android:scrollbars="none"
+            android:layout_marginBottom="8dp">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chipGroupGeofences"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleSelection="true"
+                app:selectionRequired="true"
+                app:chipSpacing="8dp">
+
+                <!-- Chip 會透過程式碼動態加入 -->
+            </com.google.android.material.chip.ChipGroup>
+        </HorizontalScrollView>
+
+
+        <!-- Geofence Config Section -->
+        <ScrollView
+            android:id="@+id/layoutGeofenceConfig"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fillViewport="true"
+            android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -124,7 +145,8 @@
                         android:layout_weight="2"
                         android:hint="default"
                         android:padding="8dp"
-                        android:textSize="14sp" />
+                        android:textSize="14sp"
+                        android:textColor="@color/black"/>
                 </LinearLayout>
 
                 <!-- Lat/Lng + Edit Button -->
@@ -237,16 +259,26 @@
                     android:layout_marginBottom="8dp"
                     android:text="Save Geofence"
                     android:textAllCaps="false" />
-
-                <Button
-                    android:id="@+id/btn_close_sheet"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Close"
-                    android:textAllCaps="false" />
             </LinearLayout>
         </ScrollView>
+
+        <Button
+            android:id="@+id/btnAddGeofence"
+            style="@style/Widget.MaterialComponents.Button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Add Geofence"
+            android:textAllCaps="false"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btn_close_sheet"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Close"
+            android:textAllCaps="false" />
     </LinearLayout>
 
 
