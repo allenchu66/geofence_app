@@ -72,6 +72,7 @@ def on_geofence_event(event: firestore_fn.Event[firestore.DocumentSnapshot]):
         print(f"🙋 [觸發者 Data] {userData}")
 
         userNickName = userData.get("displayName", "未知使用者")
+        photoUri = userData.get("photoUri")
 
         # 4. 發送通知
         notifyTitle = f"地理圍籬：{userNickName}{'進入' if action == 'enter' else '離開'} {locationName or ''}"
@@ -86,7 +87,8 @@ def on_geofence_event(event: firestore_fn.Event[firestore.DocumentSnapshot]):
                 "fenceId": fenceId,
                 "action": action,
                 "targetUid": targetUid,
-                "notifyName": data.get("notifyName", "")
+                "notifyName": notifyTitle,
+                "photoUri":photoUri
             }
         )
 
