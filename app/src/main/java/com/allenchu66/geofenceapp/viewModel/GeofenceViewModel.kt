@@ -65,19 +65,28 @@ class GeofenceViewModel(
             }
     }
 
-
-
     //OwnerUid => 要觸發Geofence的Uid
     //TargetUid => 要接收通知的Uid
-    fun uploadGeofence(ownerUid: String, lat: Double, lng: Double, radius: Float, name: String, transition: List<String>) {
+    fun uploadGeofence(
+        fenceId: String?,
+        ownerUid: String,
+        lat: Double,
+        lng: Double,
+        radius: Float,
+        name: String,
+        transition: List<String>,
+        onSuccess: (fenceId: String) -> Unit,
+        onFailure: (String) -> Unit) {
         val targetUid = FirebaseAuth.getInstance().currentUser?.uid ?: return //發送通知的目標
         val docRef = firestore.collection("users")
             .document(ownerUid)
             .collection("geofences")
             .document()
-        val fenceId = docRef.id
+
+        val finalFenceId = fenceId ?: docRef.id
+
         val entry = GeofenceData(
-            fenceId = fenceId,
+            fenceId = finalFenceId,
             ownerUid = ownerUid,
             targetUid = targetUid,
             latitude = lat,
@@ -91,9 +100,25 @@ class GeofenceViewModel(
         Log.d("uploadGeofence","要觸發Geofence 的UID ${ownerUid}")
         Log.d("uploadGeofence","要接收通知 的UID ${targetUid}")
         remoRepository.saveGeofence(entry).addOnSuccessListener {
-            Toast.makeText(getApplication(), "Geofence新增成功", Toast.LENGTH_SHORT).show()
+            onSuccess(finalFenceId)
+            //Toast.makeText(getApplication(), "Geofence新增成功", Toast.LENGTH_SHORT).show()
         }.addOnFailureListener { e ->
-            Toast.makeText(getApplication(), "Geofence新增失敗: ${e.message}", Toast.LENGTH_SHORT).show()
+            onFailure(e.message ?: "Unknown error")
+            //Toast.makeText(getApplication(), "Geofence新增失敗: ${e.message}", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    fun deleteGeofence(
+        ownerUid: String,
+        fenceId: String,
+        onSuccess: () -> Unit,
+        onFailure: (String) -> Unit) {
+        remoRepository.deleteGeofence(ownerUid, fenceId)
+            .addOnSuccessListener {
+               onSuccess()
+            }
+            .addOnFailureListener { e ->
+                onFailure(e.message ?: "Unknown error")
+            }
     }
 }

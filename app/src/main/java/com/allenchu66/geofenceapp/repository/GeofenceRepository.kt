@@ -37,11 +37,17 @@ class GeofenceRepository {
     }
 
     fun deleteGeofence(ownerUid: String, fenceId: String): com.google.android.gms.tasks.Task<Void> {
-        return db.collection("users")
+        val task = db.collection("users")
             .document(ownerUid)
             .collection("geofences")
             .document(fenceId)
             .delete()
+        task.addOnSuccessListener {
+            Log.d("Firestore", "deleteGeofence successfully: ${fenceId}")
+        }.addOnFailureListener { e ->
+            Log.e("Firestore", "deleteGeofence geofence ${fenceId}", e)
+        }
+        return task
     }
 
     // target 端讀他是 targetUid 相關的 fences

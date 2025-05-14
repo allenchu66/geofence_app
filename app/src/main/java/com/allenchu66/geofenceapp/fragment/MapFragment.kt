@@ -2,6 +2,7 @@ package com.allenchu66.geofenceapp.fragment
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -83,6 +84,9 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     private var geofenceMarker: Marker? = null
     private var geofenceCircle: Circle? = null
 
+    private var currentFenceId: String? = null
+    private var isConfigVisible = false
+
     private val sharedUserVM: SharedUserViewModel by activityViewModels {
         SharedUserViewModelFactory(SharedUserRepository())
     }
@@ -97,6 +101,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
 
         // 初始化 ViewModel
         val repository = LocationRepository()
@@ -164,6 +169,16 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     0
                 }
                 googleMap.setPadding(0, 0, 0, bottomPadding)
+                if (newState == BottomSheetBehavior.STATE_HIDDEN) {
+                    // 清除地理圍欄標記與圓圈
+                    geofenceMarker?.remove()
+                    geofenceMarker = null
+                    geofenceCircle?.remove()
+                    geofenceCircle = null
+                    // 如果你有存 savedGeofenceData，也可以一併清除
+                    savedGeofenceData = null
+                    currentFenceId = null
+                }
             }
 
             override fun onSlide(bottomSheet: View, slideOffset: Float) {
@@ -177,7 +192,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         }
 
         geofenceViewModel.ownerGeofences.observe(viewLifecycleOwner) { fences ->
-            loadGeofenceChips(fences)
+            setGeofenceSettingUI(fences)
         }
 
         checkFirebaseMessageToken()
@@ -190,57 +205,123 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     }
 
     private fun loadGeofenceChips(geofences: List<GeofenceData>) {
-        binding.chipGroupGeofences.removeAllViews()
-        if (geofences.isEmpty()) {
-            binding.layoutGeofenceConfig.visibility = View.GONE
-            binding.btnAddGeofence.visibility = View.VISIBLE
-        } else {
-            binding.layoutGeofenceConfig.visibility = View.VISIBLE
-            binding.btnAddGeofence.visibility = View.GONE
-            geofences.forEachIndexed { index, geofence ->
-                val chip = layoutInflater.inflate(
-                    R.layout.custom_chip,
-                    binding.chipGroupGeofences,
-                    false
-                ) as Chip
-                chip.text = geofence.locationName
-                chip.id = View.generateViewId()
-                chip.isCheckable = true
 
-                // 預設選取第一個 Chip
-                if (index == 0) {
-                    chip.isChecked = true
-                    displayGeofenceDetails(geofence)
-                }
-
-                chip.setOnClickListener {
-                    displayGeofenceDetails(geofence)
-                }
-
-                binding.chipGroupGeofences.addView(chip)
-            }
-            // 在最後新增 "+" Chip
-            val addChip = layoutInflater.inflate(
+        geofences.forEachIndexed { index, geofence ->
+            val chip = layoutInflater.inflate(
                 R.layout.custom_chip,
                 binding.chipGroupGeofences,
                 false
             ) as Chip
-            addChip.text = "+"
-            addChip.id = View.generateViewId()
-            addChip.isCheckable = false  // 不需要選取狀態
-            addChip.setChipIconResource(R.drawable.ic_add)  // 可搭配icon（可選）
-            addChip.setOnClickListener {
-                createNewGeofence()
+            chip.text = geofence.locationName
+            chip.id = View.generateViewId()
+            chip.isCheckable = true
+
+            // 預設選取第一個 Chip
+            val shouldCheck = if (currentFenceId == null) {
+                index == 0
+            } else {
+                geofence.fenceId == currentFenceId
             }
-            binding.chipGroupGeofences.addView(addChip)
+
+            if (shouldCheck) {
+                chip.isChecked = true
+                displayGeofenceDetails(geofence)
+            }
+
+            chip.setOnClickListener {
+                displayGeofenceDetails(geofence)
+            }
+
+            chip.setOnLongClickListener{
+                AlertDialog.Builder(requireContext())
+                    .setTitle("刪除地理圍欄")
+                    .setMessage("確定要刪除「${geofence.locationName}」嗎？")
+                    .setNegativeButton("取消", null)
+                    .setPositiveButton("刪除") { _, _ ->
+                        geofenceViewModel.deleteGeofence(geofence.ownerUid, geofence.fenceId,
+                            onSuccess = {
+                            if (currentFenceId == geofence.fenceId) {
+                                currentFenceId = null
+                                isConfigVisible = true
+                            }
+                            Toast.makeText(requireContext(), "地理圍欄刪除成功", Toast.LENGTH_SHORT).show()
+                            geofenceViewModel.loadGeofencesSetByMe(geofence.ownerUid)
+                        },
+                            onFailure = { msg ->
+                                Toast.makeText(requireContext(), "地理圍欄刪除失敗: $msg", Toast.LENGTH_SHORT).show()
+                            })
+                    }
+                    .show()
+                true
+            }
+
+            binding.chipGroupGeofences.addView(chip)
         }
+        // 在最後新增 "+" Chip
+        val addChip = layoutInflater.inflate(
+            R.layout.custom_chip,
+            binding.chipGroupGeofences,
+            false
+        ) as Chip
+        addChip.text = "+"
+        addChip.id = View.generateViewId()
+        addChip.isCheckable = false  // 不需要選取狀態
+        addChip.setChipIconResource(R.drawable.ic_add)  // 可搭配icon（可選）
+        addChip.setOnClickListener {
+            createNewGeofence()
+        }
+        binding.chipGroupGeofences.addView(addChip)
     }
+
+    private fun setGeofenceSettingUI(geofences: List<GeofenceData>) {
+        // 先清掉前一次的 Chip
+        binding.chipGroupGeofences.removeAllViews()
+
+        // 如果清單空的 → 一律顯示「設定」按鈕，按下才進入新增
+        if (geofences.isEmpty()) {
+            binding.layoutGeofenceConfig.visibility = View.GONE
+            binding.btnSetGeofence.apply {
+                visibility = View.VISIBLE
+                text = "設定 Geofence"
+                setOnClickListener {
+                    isConfigVisible = true
+                    createNewGeofence()
+                }
+            }
+            return
+        }
+
+        // 清單非空：如果還沒按過設定按鈕，也沒選過任何 fence → 只顯示設定按鈕
+        if (!isConfigVisible && currentFenceId == null) {
+            binding.layoutGeofenceConfig.visibility = View.GONE
+            binding.btnSetGeofence.apply {
+                visibility = View.VISIBLE
+                text = "設定 Geofence"
+                setOnClickListener {
+                    isConfigVisible = true
+                    setGeofenceSettingUI(geofences)  // 再次進入這個方法就會走下面那支
+                }
+            }
+            return
+        }
+
+        // 到這裡表示「已進入設定模式」(isConfigVisible) or 「正在編輯現有 fence」(currentFenceId!=null)
+        binding.btnSetGeofence.visibility       = View.GONE
+        binding.layoutGeofenceConfig.visibility = View.VISIBLE
+        loadGeofenceChips(geofences)
+        // 重置這個旗標，留給下次判斷用
+        isConfigVisible = false
+    }
+
 
     fun createNewGeofence() {
         binding.layoutGeofenceConfig.visibility = View.VISIBLE
-        binding.btnAddGeofence.visibility = View.GONE
-        // 清空現有輸入區，並初始化地圖上的 Geofence 標記
+        binding.btnSetGeofence.visibility = View.GONE
+
+        isConfigVisible = true
         savedGeofenceData = null
+        currentFenceId = null
+
         binding.etGeofenceLocationName.setText("")
         binding.tvLatLng.text = "緯度: -- , 經度: --"
         binding.sliderRadius.value = DEFAULT_RADIUS
@@ -254,7 +335,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         updateMapPaddingToBottomSheet()
     }
 
-
     private fun updateMapPaddingToBottomSheet() {
         binding.bottomSheet.post {
             googleMap.setPadding(0, 0, 0, binding.bottomSheet.height)
@@ -262,9 +342,11 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     }
 
     fun displayGeofenceDetails(geofence: GeofenceData) {
+        currentFenceId = geofence.fenceId
+
         savedGeofenceData = geofence
         binding.etGeofenceLocationName.setText(geofence.locationName)
-        binding.tvLatLng.text = "緯度: ${geofence.latitude}, 經度: ${geofence.longitude}"
+        binding.tvLatLng.text = "緯度: %.5f, 經度: %.5f".format(geofence.latitude,geofence.longitude)
         binding.sliderRadius.value = geofence.radius
         binding.tvGeofenceRadius.text = "${geofence.radius.toInt()} m"
 
@@ -272,7 +354,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         binding.chipEnter.isChecked = geofence.transition.contains("enter")
         binding.chipExit.isChecked = geofence.transition.contains("exit")
 
-        // TODO: 更新地圖顯示
+        addOrResetGeofence(LatLng(geofence.latitude,geofence.longitude), geofence.radius)
     }
 
     private fun adjustMapPadding(
@@ -337,9 +419,14 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     )
                 }, 200)
             }
+            //只有accepted的才可以設定geofence
+            geofenceViewModel.loadGeofencesSetByMe(sharedUser.uid)
+            binding.chipGroupGeofences.removeAllViews()
+            binding.layoutGeofenceConfig.visibility = View.GONE
+            binding.btnSetGeofence.visibility = View.VISIBLE
         }
 
-        geofenceViewModel.loadGeofencesSetByMe(sharedUser.uid)
+
 
         binding.apply {
             // Avatar
@@ -433,12 +520,21 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 }
 
                 geofenceViewModel.uploadGeofence(
+                    fenceId = savedGeofenceData?.fenceId,
                     ownerUid = sharedUser.uid,
                     lat = center.latitude,
                     lng = center.longitude,
                     radius = radius,
-                    name = nameInput,                      // 或從 UI 取得
-                    transition = transitions     // 或從 UI 取得
+                    name = nameInput,
+                    transition = transitions,
+                    onSuccess = { returnedFenceId ->
+                        currentFenceId = returnedFenceId
+                        Toast.makeText(requireContext(), "地理圍欄儲存成功", Toast.LENGTH_SHORT).show()
+                        geofenceViewModel.loadGeofencesSetByMe(sharedUser.uid)
+                    },
+                    onFailure = { msg ->
+                        Toast.makeText(requireContext(), "地理圍欄儲存失敗: $msg", Toast.LENGTH_SHORT).show()
+                    }
                 )
             }
 
@@ -458,9 +554,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             sliderRadius.addOnChangeListener { _, value, _ ->
                 updateCircleRadius(value.toDouble())
             }
-            btnAddGeofence.setOnClickListener {
-                createNewGeofence()
-            }
         }
     }
 
@@ -470,7 +563,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             if (marker == geofenceMarker) {
                 geofenceCircle?.center = marker.position
                 binding.tvLatLng.text =
-                    "Lat: %.5f, Lng: %.5f".format(
+                    "緯度: %.5f, 經度: %.5f".format(
                         marker.position.latitude,
                         marker.position.longitude
                     )
@@ -645,14 +738,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         return bitmap
     }
 
-    // 自動調整視角包住所有 Marker
-    private fun zoomToFitAllMarkers() {
-        if (markerMap.isEmpty()) return
-        val builder = LatLngBounds.builder()
-        markerMap.values.forEach { marker -> builder.include(marker.position) }
-        val bounds = builder.build()
-        googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
-    }
 
     // 權限處理結果回調
     @SuppressLint("MissingPermission")
