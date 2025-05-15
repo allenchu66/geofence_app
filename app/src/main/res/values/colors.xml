@@ -7,4 +7,24 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Primary Brand Blue -->
+    <color name="colorPrimary">#2196F3</color>           <!-- Blue 500 -->
+    <color name="colorPrimaryVariant">#A5DEE4</color>
+    <color name="colorOnPrimary">#FFFFFF</color>
+
+    <!-- Secondary Accent (Teal) -->
+    <color name="colorSecondary">#03DAC5</color>         <!-- Teal 200 -->
+    <color name="colorSecondaryVariant">#018786</color>   <!-- Teal 700 -->
+    <color name="colorOnSecondary">#000000</color>
+
+    <!-- Background & Surface -->
+    <color name="colorBackground">#E3F2FD</color>        <!-- Blue 50, 淡雅背景 -->
+    <color name="colorSurface">#FFFFFF</color>
+    <color name="colorOnBackground">#000000</color>
+    <color name="colorOnSurface">#000000</color>
+
+    <!-- Error 系統色 -->
+    <color name="colorError">#B00020</color>
+    <color name="colorOnError">#FFFFFF</color>
 </resources>

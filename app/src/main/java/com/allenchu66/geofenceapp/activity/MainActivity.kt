@@ -28,6 +28,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.findNavController
 import androidx.navigation.fragment.NavHostFragment
@@ -114,7 +115,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         val decorView = window.decorView
-        var flags = decorView.systemUiVisibility
         decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
 
     }
@@ -180,6 +180,21 @@ class MainActivity : AppCompatActivity() {
         val navHostFragment = supportFragmentManager
             .findFragmentById(R.id.fragmentContainerView) as NavHostFragment
         val navController = navHostFragment.navController
+
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            when (destination.id) {
+                R.id.mapFragment -> {
+                    // 進入 MapFragment：解鎖 Drawer、顯示按鈕
+                    binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED)
+                    binding.btnOpenDrawer.visibility = View.VISIBLE
+                }
+                else -> {
+                    // 其他 Fragment（例如 Login）：鎖住 Drawer、隱藏按鈕
+                    binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
+                    binding.btnOpenDrawer.visibility = View.GONE
+                }
+            }
+        }
 
         val btnAccountSetting = customDrawerView.findViewById<ImageButton>(R.id.btn_account_settings)
         btnAccountSetting.setOnClickListener{
