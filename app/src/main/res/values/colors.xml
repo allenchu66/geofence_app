@@ -27,4 +27,5 @@
     <!-- Error 系統色 -->
     <color name="colorError">#B00020</color>
     <color name="colorOnError">#FFFFFF</color>
+    <color name="transparent">#00FFFFFF</color>
 </resources>

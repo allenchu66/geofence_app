@@ -71,10 +71,10 @@ class MainActivity : AppCompatActivity() {
 
             if (photoUri != null) {
                 loadUserPhotoInto(imageUserPhoto, photoUri)
-                loadUserPhotoInto(binding.btnOpenDrawer, photoUri)
+                //loadUserPhotoInto(binding.btnOpenDrawer, photoUri)
             } else {
                 imageUserPhoto.setImageResource(R.drawable.ic_default_avatar)
-                binding.btnOpenDrawer.setImageResource(R.drawable.ic_default_avatar)
+                //binding.btnOpenDrawer.setImageResource(R.drawable.ic_default_avatar)
             }
         }
     }

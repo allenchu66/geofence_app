@@ -14,10 +14,14 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
+import androidx.room.Room
+import com.allenchu66.geofenceapp.GeofenceHelper
 import com.allenchu66.geofenceapp.R
 import com.allenchu66.geofenceapp.activity.MainActivity
+import com.allenchu66.geofenceapp.database.GeofenceDatabase
 import com.allenchu66.geofenceapp.databinding.DialogCropImageBinding
 import com.allenchu66.geofenceapp.databinding.FragmentAccountSettingsBinding
+import com.allenchu66.geofenceapp.repository.GeofenceLocalRepository
 import com.bumptech.glide.Glide
 import com.canhub.cropper.CropImageOptions
 import com.canhub.cropper.CropImageView
@@ -33,6 +37,8 @@ class AccountSettingsFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val auth = FirebaseAuth.getInstance()
+
+    private lateinit var geofenceHelper: GeofenceHelper
 
     private val pickImage =
         registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -92,6 +98,15 @@ class AccountSettingsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        val db = Room.databaseBuilder(
+            requireContext().applicationContext,
+            GeofenceDatabase::class.java,
+            "app_db"
+        ).build()
+        val localRepo = GeofenceLocalRepository(db.geofenceDao())
+
+        geofenceHelper = GeofenceHelper(requireContext(), localRepo)
+
         val user = auth.currentUser
         binding.textEmail.text = user?.email ?: "No email"
         binding.textNickname.setText(user?.displayName ?: "Untitled")
@@ -136,6 +151,7 @@ class AccountSettingsFragment : Fragment() {
 
         binding.btnLogout.setOnClickListener {
             auth.signOut()
+            geofenceHelper.removeAllGeofences()
             findNavController().navigate(R.id.action_accountSettingsFragment_to_loginFragment)
         }
 

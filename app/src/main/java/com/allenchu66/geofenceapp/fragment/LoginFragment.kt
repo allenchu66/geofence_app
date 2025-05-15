@@ -57,6 +57,10 @@ class LoginFragment : Fragment() {
                 Toast.makeText(requireContext(), "登入失敗", Toast.LENGTH_SHORT).show()
             }
         }
+
+        binding.registerButton.setOnClickListener{
+            findNavController().navigate(R.id.action_loginFragment_to_registerFragment)
+        }
     }
 
     private fun createUserIfNotExists(user: FirebaseUser) {

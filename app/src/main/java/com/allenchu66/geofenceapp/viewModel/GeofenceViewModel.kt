@@ -121,4 +121,8 @@ class GeofenceViewModel(
                 onFailure(e.message ?: "Unknown error")
             }
     }
+
+    fun removeAllGeofence(){
+        helper.removeAllGeofences()
+    }
 }
