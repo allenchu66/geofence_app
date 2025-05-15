@@ -49,8 +49,7 @@ class GeofenceHelper(private val context: Context,private val repo: GeofenceLoca
         // 3. 建 request（同時檢查 enter & exit）
         val request = GeofencingRequest.Builder()
             .setInitialTrigger(
-                GeofencingRequest.INITIAL_TRIGGER_ENTER or
-                        GeofencingRequest.INITIAL_TRIGGER_EXIT
+               0
             )
             .addGeofence(geofence)
             .build()
