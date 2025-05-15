@@ -41,7 +41,7 @@ class SharedUserAdapter(
             b.imgAvatar.setImageResource(R.drawable.ic_default_avatar)
         }
 
-        b.textEmail.text = user.email
+        b.textNickname.text = user.displayName
         b.textStatus.text = when (user.status) {
             "pending" -> {
                 if (user.inviter == meUid) {
@@ -64,17 +64,6 @@ class SharedUserAdapter(
             }
             else -> ""
         }
-
-        // 根據狀態設定按鈕文字
-//        b.btnAction.text = when (user.status) {
-//            "pending" -> "接受"
-//            "waiting" -> "取消邀請"
-//            "shared" -> "停止共享"
-//            "declined" -> "重新邀請"
-//            "cancelled" -> "重新邀請"
-//            "none" -> "邀請"
-//            else -> "操作"
-//        }
 
         b.btnAction.setOnClickListener {
             onActionClick(user)

@@ -9,7 +9,7 @@
         android:id="@+id/image_pin_bg"
         android:layout_width="50dp"
         android:layout_height="50dp"
-        android:src="@drawable/ic_map_pin_online"
+        android:src="@drawable/ic_map_pin_offline"
         android:scaleType="fitXY"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -25,4 +25,13 @@
         android:scaleType="centerCrop"
         android:src="@drawable/ic_default_avatar"
         android:layout_marginTop="2dp"/>
+
+    <ImageView
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:src="@drawable/ic_map_pin_mask"
+        android:scaleType="fitXY"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
 </androidx.constraintlayout.widget.ConstraintLayout>

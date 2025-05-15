@@ -17,6 +17,10 @@ class SharedUserRepository {
     private val firestore = Firebase.firestore
     val auth = FirebaseAuth.getInstance()
 
+    companion object {
+        private const val TAG = "SharedUserRepository"
+    }
+
     private fun pairId(uid1: String, uid2: String) =
         listOf(uid1, uid2)
             .sorted()
@@ -72,30 +76,6 @@ class SharedUserRepository {
             }
     }
 
-    /** 查對方的 user 資料（根據一串 UID） */
-    fun fetchUsersByUids(uids: List<String>, onResult: (List<SharedUser>) -> Unit) {
-        if (uids.isEmpty()) { onResult(emptyList()); return }
-        val tasks = uids.map { uid -> firestore.collection("users").document(uid).get() }
-        // 串接多個 get()，收齊結果
-        Tasks.whenAllSuccess<DocumentSnapshot>(tasks)
-            .addOnSuccessListener { docs ->
-                val users = docs.map { doc ->
-                    SharedUser(
-                        uid = doc.id,
-                        email = doc.getString("email").orEmpty(),
-                        displayName = doc.getString("displayName").orEmpty(),
-                        photoUri = doc.getString("photoUri").orEmpty(),
-                        status = "accepted"
-                    )
-                }
-                onResult(users)
-            }
-            .addOnFailureListener {
-                onResult(emptyList())
-            }
-    }
-
-
     fun updateShareRequestStatusByEmail(
         email: String,
         status: String,  // "pending" / "accepted" / "declined"
@@ -130,9 +110,14 @@ class SharedUserRepository {
 
                 reqRef.set(updates, SetOptions.merge())
                     .addOnSuccessListener { onFinish(true) }
-                    .addOnFailureListener { onFinish(false) }
+                    .addOnFailureListener {e ->
+                        Log.e(TAG, "Failed to update share_request ($pairId) to status=$status", e)
+                        onFinish(false)
+                    }
             }
-            .addOnFailureListener { onFinish(false) }
+            .addOnFailureListener {e ->
+                Log.e(TAG, "Error querying users collection for email=$email", e)
+                onFinish(false) }
     }
 
 
@@ -180,10 +165,12 @@ class SharedUserRepository {
                     }
                     .addOnFailureListener { e ->
                         onResult(false, e.message ?: "邀請時發生錯誤")
+                        Log.e(TAG, "sendShareRequestByEmail=$email", e)
                     }
             }
             .addOnFailureListener { e ->
                 onResult(false, e.message ?: "找不到使用者")
+                Log.e(TAG, "sendShareRequestByEmail=$email", e)
             }
     }
 

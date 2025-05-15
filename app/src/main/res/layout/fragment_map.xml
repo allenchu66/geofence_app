@@ -24,6 +24,7 @@
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
 
         <!-- User Header -->
+        <!-- 原本的 User Header -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -40,6 +41,7 @@
                 android:scaleType="centerCrop"
                 android:src="@drawable/ic_default_avatar" />
 
+            <!-- 這裡是姓名＋Email 的垂直區塊 -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -60,7 +62,18 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="user@example.com"
-                    android:textSize="14sp" />
+                    android:textSize="14sp"
+                    android:textColor="?attr/colorOnSurface"/>
+
+                <!-- 新增：最後更新時間 -->
+                <TextView
+                    android:id="@+id/text_update_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="更新於 --"
+                    android:textSize="12sp"
+                    android:textColor="?attr/colorOnSurface"
+                    android:layout_marginTop="4dp"/>
             </LinearLayout>
 
             <Button
@@ -71,6 +84,7 @@
                 android:text="Share"
                 android:textAllCaps="false" />
         </LinearLayout>
+
 
         <Button
             android:id="@+id/btn_decline"

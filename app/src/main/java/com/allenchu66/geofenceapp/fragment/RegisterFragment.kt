@@ -71,7 +71,7 @@ class RegisterFragment : Fragment(R.layout.fragment_register) {
         dialog.show()
     }
 
-    private fun uploadImageToFirebase(user: FirebaseUser, uri: Uri, nickname: String) {
+    private fun uploadImageToFirebase(user: FirebaseUser, uri: Uri,email: String, nickname: String) {
         val uid = user.uid
         val storageRef = Firebase.storage.reference.child("photos/$uid.jpg")
 
@@ -117,6 +117,7 @@ class RegisterFragment : Fragment(R.layout.fragment_register) {
                                         .document(uid)
                                         .set(
                                             mapOf(
+                                                "email" to email,
                                                 "photoUri" to downloadUri.toString(),
                                                 "displayName" to nickname
                                             ),
@@ -138,7 +139,7 @@ class RegisterFragment : Fragment(R.layout.fragment_register) {
             }
     }
 
-    private fun saveUserProfile(user: FirebaseUser, nickname: String) {
+    private fun saveUserProfile(user: FirebaseUser,email: String ,nickname: String) {
         // 沒有選擇照片，只更新 displayName
         val profileUpdates = UserProfileChangeRequest.Builder()
             .setDisplayName(nickname)
@@ -151,7 +152,8 @@ class RegisterFragment : Fragment(R.layout.fragment_register) {
                         .collection("users")
                         .document(user.uid)
                         .set(
-                            mapOf("displayName" to nickname),
+                            mapOf("displayName" to nickname,
+                                "email" to email),
                             SetOptions.merge()
                         )
                     (activity as? MainActivity)?.updateProfileUI(auth.currentUser)
@@ -187,9 +189,9 @@ class RegisterFragment : Fragment(R.layout.fragment_register) {
                         .addOnSuccessListener { result ->
                             result.user?.let { user ->
                                 if (avatarUri != null) {
-                                    uploadImageToFirebase(user, avatarUri!!, nickname)
+                                    uploadImageToFirebase(user, avatarUri!!,email ,nickname)
                                 } else {
-                                    saveUserProfile(user, nickname)
+                                    saveUserProfile(user,email, nickname)
                                 }
                             }
                         }

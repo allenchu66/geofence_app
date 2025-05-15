@@ -168,9 +168,9 @@ class MainActivity : AppCompatActivity() {
             adapter.updateList(userList)
         }
 
-        viewModel.shareResult.observe(this){ (success, message) ->
-            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-        }
+//        viewModel.shareResult.observe(this){ (success, message) ->
+//            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+//        }
 
         val btn_add_shared_user = customDrawerView.findViewById<Button>(R.id.btn_add_shared_user)
         btn_add_shared_user.setOnClickListener{

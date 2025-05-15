@@ -7,10 +7,14 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.format.DateUtils
 import android.transition.Transition
 import android.util.Log
 import android.util.StateSet
@@ -19,6 +23,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -52,6 +57,7 @@ import com.google.android.gms.maps.model.*
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.chip.Chip
 import com.google.firebase.Firebase
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.firestore
@@ -86,6 +92,8 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
     private var currentFenceId: String? = null
     private var isConfigVisible = false
+
+    private var currentSharedUserUid: String? = null
 
     private val sharedUserVM: SharedUserViewModel by activityViewModels {
         SharedUserViewModelFactory(SharedUserRepository())
@@ -123,6 +131,17 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             ViewModelProvider(this, geofenceViewModelFactory).get(GeofenceViewModel::class.java)
 
         sharedUserVM.loadSharedUsers()
+        sharedUserVM.sharedUsers.observe(viewLifecycleOwner) { users ->
+            // 只有 sheet 展開時才重整 UI
+            if (sheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
+                currentSharedUserUid
+                    ?.let { uid -> users.find { it.uid == uid } }
+                    ?.let { updatedUser ->
+                        // 重新渲染 bottom sheet
+                        expandSettingsSheet(updatedUser)
+                    }
+            }
+        }
 
         // 初始化地圖 Fragment
         val mapFragment =
@@ -133,9 +152,11 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         mapViewModel.sharedLocations.observe(viewLifecycleOwner) { locations ->
             locations.forEach { shared ->
                 updateOrAddMarker(
+                    displayName = shared.user.displayName,
                     userId = shared.uid,
                     latLng = shared.latLng,
-                    photoUrl = shared.user.photoUri
+                    photoUrl = shared.user.photoUri,
+                    timestamp = shared.timestamp
                 )
             }
 
@@ -147,6 +168,11 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     marker.remove()
                     iterator.remove()
                 }
+            }
+
+            currentSharedUserUid?.let { uid ->
+                locations.firstOrNull { it.uid == uid }?.timestamp
+                    .let { ts -> binding.textUpdateTime.text }
             }
         }
 
@@ -178,6 +204,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     // 如果你有存 savedGeofenceData，也可以一併清除
                     savedGeofenceData = null
                     currentFenceId = null
+                    currentSharedUserUid = null
                 }
             }
 
@@ -232,7 +259,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 displayGeofenceDetails(geofence)
             }
 
-            chip.setOnLongClickListener{
+            chip.setOnLongClickListener {
                 AlertDialog.Builder(requireContext())
                     .setTitle("刪除地理圍欄")
                     .setMessage("確定要刪除「${geofence.locationName}」嗎？")
@@ -240,15 +267,23 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     .setPositiveButton("刪除") { _, _ ->
                         geofenceViewModel.deleteGeofence(geofence.ownerUid, geofence.fenceId,
                             onSuccess = {
-                            if (currentFenceId == geofence.fenceId) {
-                                currentFenceId = null
-                                isConfigVisible = true
-                            }
-                            Toast.makeText(requireContext(), "地理圍欄刪除成功", Toast.LENGTH_SHORT).show()
-                            geofenceViewModel.loadGeofencesSetByMe(geofence.ownerUid)
-                        },
+                                if (currentFenceId == geofence.fenceId) {
+                                    currentFenceId = null
+                                    isConfigVisible = true
+                                }
+                                Toast.makeText(
+                                    requireContext(),
+                                    "地理圍欄刪除成功",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                geofenceViewModel.loadGeofencesSetByMe(geofence.ownerUid)
+                            },
                             onFailure = { msg ->
-                                Toast.makeText(requireContext(), "地理圍欄刪除失敗: $msg", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    requireContext(),
+                                    "地理圍欄刪除失敗: $msg",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             })
                     }
                     .show()
@@ -306,7 +341,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         }
 
         // 到這裡表示「已進入設定模式」(isConfigVisible) or 「正在編輯現有 fence」(currentFenceId!=null)
-        binding.btnSetGeofence.visibility       = View.GONE
+        binding.btnSetGeofence.visibility = View.GONE
         binding.layoutGeofenceConfig.visibility = View.VISIBLE
         loadGeofenceChips(geofences)
         // 重置這個旗標，留給下次判斷用
@@ -346,7 +381,8 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
         savedGeofenceData = geofence
         binding.etGeofenceLocationName.setText(geofence.locationName)
-        binding.tvLatLng.text = "緯度: %.5f, 經度: %.5f".format(geofence.latitude,geofence.longitude)
+        binding.tvLatLng.text =
+            "緯度: %.5f, 經度: %.5f".format(geofence.latitude, geofence.longitude)
         binding.sliderRadius.value = geofence.radius
         binding.tvGeofenceRadius.text = "${geofence.radius.toInt()} m"
 
@@ -354,7 +390,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         binding.chipEnter.isChecked = geofence.transition.contains("enter")
         binding.chipExit.isChecked = geofence.transition.contains("exit")
 
-        addOrResetGeofence(LatLng(geofence.latitude,geofence.longitude), geofence.radius)
+        addOrResetGeofence(LatLng(geofence.latitude, geofence.longitude), geofence.radius)
     }
 
     private fun adjustMapPadding(
@@ -364,6 +400,22 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         val bottomPadding = (sheet.height * slideOffset).toInt()
         googleMap.setPadding(0, 0, 0, bottomPadding)
     }
+
+    private fun convertRelativeUpdateTime(timestamp: Timestamp?): String {
+        if (timestamp == null) {
+            return "更新時間未知"
+        }
+        // 轉成毫秒
+        val timeMillis = timestamp.toDate().time
+        // 產生「5 分鐘前」「2 小時前」之類的字串
+        val relative = DateUtils.getRelativeTimeSpanString(
+            timeMillis,
+            System.currentTimeMillis(),
+            DateUtils.MINUTE_IN_MILLIS
+        )
+        return "更新於 $relative"
+    }
+
 
     private fun checkFirebaseMessageToken() {
         FirebaseMessaging.getInstance().token
@@ -380,7 +432,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     return@addOnCompleteListener
                 }
 
-                Log.d("FCM", "Token:"+token)
+                Log.d("FCM", "Token:" + token)
 
                 val db = Firebase.firestore
                 db.collection("users")
@@ -408,7 +460,9 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
     fun expandSettingsSheet(sharedUser: SharedUser) {
         val meUid = FirebaseAuth.getInstance().currentUser?.uid
+        currentSharedUserUid = sharedUser.uid
         sheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+        binding.textUpdateTime.text = "更新時間未知"
 
         if (sharedUser.status == "accepted") {
             val marker = markerMap[sharedUser.uid]
@@ -424,6 +478,16 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             binding.chipGroupGeofences.removeAllViews()
             binding.layoutGeofenceConfig.visibility = View.GONE
             binding.btnSetGeofence.visibility = View.VISIBLE
+            binding.textUpdateTime.visibility = View.VISIBLE
+            mapViewModel.sharedLocations.value
+                ?.firstOrNull { it.uid == sharedUser.uid }
+                ?.timestamp
+                .let { ts -> binding.textUpdateTime.text = convertRelativeUpdateTime(ts) }
+        } else {
+            binding.chipGroupGeofences.removeAllViews()
+            binding.layoutGeofenceConfig.visibility = View.GONE
+            binding.btnSetGeofence.visibility = View.GONE
+            binding.textUpdateTime.visibility = View.GONE
         }
 
 
@@ -529,11 +593,16 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     transition = transitions,
                     onSuccess = { returnedFenceId ->
                         currentFenceId = returnedFenceId
-                        Toast.makeText(requireContext(), "地理圍欄儲存成功", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "地理圍欄儲存成功", Toast.LENGTH_SHORT)
+                            .show()
                         geofenceViewModel.loadGeofencesSetByMe(sharedUser.uid)
                     },
                     onFailure = { msg ->
-                        Toast.makeText(requireContext(), "地理圍欄儲存失敗: $msg", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            requireContext(),
+                            "地理圍欄儲存失敗: $msg",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
                 )
             }
@@ -633,6 +702,32 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         }
 
         googleMap.setOnMarkerDragListener(geofenceDragListener)
+
+        googleMap.setOnMarkerClickListener { marker ->
+            marker.showInfoWindow()
+            true
+        }
+        googleMap.setInfoWindowAdapter(object : GoogleMap.InfoWindowAdapter {
+            override fun getInfoWindow(marker: Marker): View? = null
+
+            override fun getInfoContents(marker: Marker): View {
+                val view = layoutInflater.inflate(R.layout.custom_map_info_window, null)
+                val ivAvatar = view.findViewById<ImageView>(R.id.ivAvatar)
+                val tvTitle = view.findViewById<TextView>(R.id.tvTitle)
+                val tvSnippet = view.findViewById<TextView>(R.id.tvSnippet)
+
+                tvTitle.text = marker.title
+                tvSnippet.text = marker.snippet
+
+                (marker.tag as? String)?.let { url ->
+                    Glide.with(view)
+                        .load(url)
+                        .circleCrop()
+                        .into(ivAvatar)
+                }
+                return view
+            }
+        })
     }
 
     // 定位並移動視角到自己位置
@@ -681,45 +776,78 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     }
 
     // 新增或更新 Marker
-    private fun updateOrAddMarker(userId: String, latLng: LatLng, photoUrl: String) {
-        Glide.with(this)
+    private fun updateOrAddMarker(
+        displayName: String,
+        userId: String,
+        latLng: LatLng,
+        photoUrl: String?,
+        timestamp: Timestamp?
+    ) {
+        // 產生相對時間字串
+        val snippetText = convertRelativeUpdateTime(timestamp)
+
+        // 準備 Glide Request：circleCrop + asBitmap
+        val glideRequest = Glide.with(this)
             .asBitmap()
-            .load(photoUrl)
             .circleCrop()
-            .into(object : CustomTarget<Bitmap>(60, 60) {
-                override fun onResourceReady(
-                    bitmap: Bitmap,
-                    transition: com.bumptech.glide.request.transition.Transition<in Bitmap>?
-                ) {
-                    val markerBmp = getMarkerBitmapFromView(bitmap)
-                    val icon = BitmapDescriptorFactory.fromBitmap(markerBmp)
 
-                    val existing = markerMap[userId]
-                    if (existing != null) {
-                        existing.position = latLng
-                        existing.setIcon(icon)
-                    } else {
-                        val marker = googleMap.addMarker(
-                            MarkerOptions()
-                                .position(latLng)
-                                .title("Shared User: $userId")
-                                .icon(icon)
-                        )
-                        marker?.let { markerMap[userId] = it }
+        // 根據 photoUrl 決定 load 什麼
+        if (photoUrl.isNullOrEmpty()) {
+            glideRequest.load(R.drawable.ic_default_avatar)
+        } else {
+            glideRequest.load(photoUrl)
+        }.into(object : CustomTarget<Bitmap>(60, 60) {
+            override fun onResourceReady(
+                bitmap: Bitmap,
+                transition: com.bumptech.glide.request.transition.Transition<in Bitmap>?
+            ) {
+
+                val isOffline = timestamp?.let {
+                    System.currentTimeMillis() - it.toDate().time > 60 * 60 * 1000
+                } ?: false
+
+                val markerBmp = getMarkerBitmapFromView(bitmap,isOffline)
+                val icon = BitmapDescriptorFactory.fromBitmap(markerBmp)
+
+                val existing = markerMap[userId]
+                if (existing != null) {
+                    existing.apply {
+                        position = latLng
+                        setIcon(icon)
+                        snippet = snippetText
+                        tag     = photoUrl   // 可以是 null，InfoWindowAdapter 再判斷
                     }
-                    // 重新調整縮放（可選）
-                    //zoomToFitAllMarkers()
+                } else {
+                    val marker = googleMap.addMarker(
+                        MarkerOptions()
+                            .position(latLng)
+                            .title("$displayName")
+                            .snippet(snippetText)
+                            .icon(icon)
+                    )
+                    marker?.apply {
+                        tag = photoUrl
+                        markerMap[userId] = this
+                    }
                 }
+            }
 
-                override fun onLoadCleared(placeholder: Drawable?) {
-                }
-            })
+            override fun onLoadCleared(placeholder: Drawable?) {}
+        })
     }
 
-    private fun getMarkerBitmapFromView(photo: Bitmap): Bitmap {
+
+
+    private fun getMarkerBitmapFromView(photo: Bitmap,isOffline: Boolean): Bitmap {
         // Inflate
+        var layout_id: Int? = null
+        if(isOffline){
+            layout_id = R.layout.marker_layout_offline
+        }else{
+            layout_id = R.layout.marker_layout
+        }
         val view = LayoutInflater.from(requireContext())
-            .inflate(R.layout.marker_layout, null, false)
+            .inflate(layout_id, null, false)
         val iv = view.findViewById<ImageView>(R.id.image_avatar)
         iv.setImageBitmap(photo)
 
