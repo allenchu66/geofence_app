@@ -75,19 +75,24 @@ def on_geofence_event(event: firestore_fn.Event[firestore.DocumentSnapshot]):
         photoUri = userData.get("photoUri")
 
         # 4. 發送通知
-        notifyTitle = f"地理圍籬：{userNickName}{'進入' if action == 'enter' else '離開'} {locationName or ''}"
+        notifyTitle = f"地理圍籬"
+        notifyContent = f"{userNickName}{'進入' if action == 'enter' else '離開'} {locationName or ''}"
         print(f"[Sending FCM] Title: {notifyTitle}")
 
         message = messaging.Message(
             token=token,
-            notification=messaging.Notification(
-                title=notifyTitle
-            ),
+#             含 notification 的 payload 會被當成 “Notification message”：
+#             App 在背景：系統直接幫你顯示一則預設通知，不會呼叫 onMessageReceived()，你也拿不到裡面的 data 內容去做自訂 heads-up。
+#             App 在前景：反而會呼叫一次，但行為也比較受系統策略限制。
+#             notification=messaging.Notification(
+#                 title=notifyTitle
+#             ),
             data={
                 "fenceId": fenceId,
                 "action": action,
                 "targetUid": targetUid,
-                "notifyName": notifyTitle,
+                "notifyTitle": notifyTitle,
+                "notifyContent": notifyContent,
                 "photoUri":photoUri
             }
         )

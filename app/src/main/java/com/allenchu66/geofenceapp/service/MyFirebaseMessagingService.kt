@@ -39,26 +39,26 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         if (remoteMessage.data.isNotEmpty()) {
             val data = remoteMessage.data
             Log.d("FCM",data.toString())
-            val fenceId = data["fenceId"]
-            val action  = data["action"]
-            val name    = data["notifyName"]
+            val title    = data["notifyTitle"]
+            val content    = data["notifyContent"]
             val photoUri = data["photoUri"]
-            showNotification(name,photoUri)
+            showNotification(title,content,photoUri)
         }
     }
 
-    private fun showNotification(title: String?, photoUri: String?) {
-        Log.d("FCM", "ShowNotification: $title")
+    private fun showNotification(title: String?,content: String?, photoUri: String?) {
+        Log.d("FCM", "ShowNotification: $title $content")
         val channelId = "geofence_channel"
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val channel = NotificationChannel(
             channelId,
             "地理圍欄偵測",
-            NotificationManager.IMPORTANCE_HIGH // 這要是 HIGH
+            NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            enableLights(true)
-            enableVibration(true)  // 必須開啟震動
+            description = "Geofence 觸發通知"
+            //enableLights(true)
+            enableVibration(true)
             setSound(
                 RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
                 AudioAttributes.Builder()
@@ -71,7 +71,10 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         if (photoUri == null) {
             val notif = NotificationCompat.Builder(this, channelId)
                 .setContentTitle(title)
+                .setContentText(content)
                 .setSmallIcon(R.drawable.ic_geofence_icon)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .build()
             nm.notify(System.currentTimeMillis().toInt(), notif)
             return
@@ -89,6 +92,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
                 val notif = NotificationCompat.Builder(this@MyFirebaseMessagingService, channelId)
                     .setContentTitle(title)
+                    .setContentText(content)
                     .setSmallIcon(R.drawable.ic_geofence_icon)
                     .setLargeIcon(bitmap)
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
