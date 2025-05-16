@@ -88,6 +88,7 @@ def on_geofence_event(event: firestore_fn.Event[firestore.DocumentSnapshot]):
 #                 title=notifyTitle
 #             ),
             data={
+                "type":"GEOFENCE_EVENT",
                 "fenceId": fenceId,
                 "action": action,
                 "targetUid": targetUid,
@@ -113,3 +114,55 @@ def on_geofence_event(event: firestore_fn.Event[firestore.DocumentSnapshot]):
 
     except Exception as e:
         print(f"[Unhandled Exception] {e}")
+
+
+@firestore_fn.on_document_written(
+    document="users/{uid}/geofences/{fenceId}"
+)
+
+def on_geofence_config_change(event: firestore_fn.Event[firestore.DocumentSnapshot]):
+    """
+    監聽 users/{uid}/geofences/{fenceId} 的新增/更新/刪除事件，
+    只要有任何變動，就將 type=GEOFENCE_CHANGE 的 data-only FCM 發到該使用者的 token。
+    App 端收到後即可重新 load geofence，不用管具體變動內容。
+    """
+    uid      = event.params.get("uid")
+    fence_id = event.params.get("fenceId")
+
+    if not uid or not fence_id:
+        print("[Skip] Missing uid or fenceId")
+        return
+
+    # 拿使用者的 FCM token
+    user_ref = firestore.client() \
+        .collection("users") \
+        .document(uid)
+    user_snap = user_ref.get()
+    if not user_snap.exists:
+        print(f"[Error] User doc {uid} not found")
+        return
+
+    token = user_snap.to_dict().get("fcmToken")
+    if not token:
+        print(f"[Skip] No FCM token for user {uid}")
+        return
+
+    # data-only payload
+    data_payload = {
+        "type":    "GEOFENCE_CHANGE",
+        "fenceId": fence_id
+    }
+
+    try:
+        message = messaging.Message(
+            token=token,
+            data=data_payload
+        )
+        response = messaging.send(message)
+        print(f"[FCM Sent] to user={uid}, fenceId={fence_id}, response={response}")
+    except exceptions.FirebaseError as e:
+        print(f"[FCM Error] {e}")
+        # 可選：若 token 無效，就刪掉它
+        if "not found" in str(e).lower() or "invalid-argument" in str(e).lower():
+            user_ref.update({"fcmToken": firestore.DELETE_FIELD})
+            print(f"[Info] Cleared invalid token for user {uid}")
