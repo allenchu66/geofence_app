@@ -56,9 +56,91 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvUserNickname: TextView
     private lateinit var imageUserPhoto: ImageView
 
+    /** 前景定位 + 通知權限 */
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        // 前景定位
+        val fine = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarse = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (fine || coarse) {
+            // 拿到前景定位後再去請求背景定位
+            requestBackgroundLocation()
+        } else {
+            Toast.makeText(this, "請允許前景定位權限", Toast.LENGTH_SHORT).show()
+        }
+
+        // Android 13以上需要額外請求通知權限
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val notifyGranted = permissions[Manifest.permission.POST_NOTIFICATIONS] == true
+            if (!notifyGranted) {
+                Toast.makeText(this, "請允許顯示通知", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /** 背景定位權限 */
+    private val backgroundPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            startLocationService()
+        } else {
+            // 如果User選了"不再詢問"，引導去設定
+            if (!shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_BACKGROUND_LOCATION)) {
+                AlertDialog.Builder(this)
+                    .setTitle("需要背景定位")
+                    .setMessage("請到設定允許[背景定位]權限才能接收Geofence通知")
+                    .setPositiveButton("前往設定") { _, _ ->
+                        val intent = Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.fromParts("package", packageName, null)
+                        )
+                        startActivity(intent)
+                    }
+                    .setNegativeButton("取消", null)
+                    .show()
+            } else {
+                Toast.makeText(this, "未取得背景定位權限，背景Geofence通知功能將無法使用", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            Toast.makeText(this, "請允許顯示通知", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val user = firebaseAuth.currentUser
         updateProfileUI(user)
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        auth = FirebaseAuth.getInstance()
+        initViewModel()
+        setupDrawer()
+        navigateIfLoggedIn()
+
+        //請求前景定位權限
+        requestLocationPermissions()
+
+        //隱藏系統狀態欄
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).let { controller ->
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+
     }
 
     fun updateProfileUI(user: FirebaseUser?) {
@@ -86,37 +168,6 @@ class MainActivity : AppCompatActivity() {
             .placeholder(R.drawable.ic_default_avatar)
             .error(R.drawable.ic_default_avatar)
             .into(target)
-    }
-
-    private val locationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        handleLocationPermissionsResult(permissions)
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        auth = FirebaseAuth.getInstance()
-        initViewModel()
-        setupDrawer()
-        navigateIfLoggedIn()
-        requestLocationPermissions()
-
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-
-        WindowInsetsControllerCompat(window, window.decorView).let { controller ->
-            controller.hide(WindowInsetsCompat.Type.systemBars())
-            controller.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
-
-        val decorView = window.decorView
-        decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-
     }
 
     private fun initViewModel(){
@@ -232,52 +283,49 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestLocationPermissions() {
-        locationPermissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION,
-                Manifest.permission.ACCESS_BACKGROUND_LOCATION,
-            )
+        val perms = mutableListOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            perms += Manifest.permission.POST_NOTIFICATIONS
         }
+
+        permissionLauncher.launch(perms.toTypedArray())
     }
 
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (!granted) {
-            Toast.makeText(this, "請允許顯示通知", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun handleLocationPermissionsResult(permissions: Map<String, Boolean>) {
-        val fine = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
-        val coarse = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
-        val background = permissions[Manifest.permission.ACCESS_BACKGROUND_LOCATION] ?: false
-
-        // Android 14+ 要加上 FOREGROUND_SERVICE_LOCATION 權限檢查
-        val foregroundServiceGranted = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.FOREGROUND_SERVICE_LOCATION
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        } else {
-            true
-        }
-
-        if ((fine || coarse) && background && foregroundServiceGranted) {
-            val serviceIntent = Intent(this, LocationUpdateService::class.java)
-            ContextCompat.startForegroundService(this, serviceIntent)
-        } else {
-            Toast.makeText(this, "請允許背景位置與前景服務權限", Toast.LENGTH_LONG).show()
-            val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = android.net.Uri.fromParts("package", packageName, null)
+    /**背景定位權限*/
+    private fun requestBackgroundLocation() {
+        when {
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.Q -> {
+                // Android 9 以下
+                startLocationService()
             }
-            startActivity(intent)
+            Build.VERSION.SDK_INT == Build.VERSION_CODES.Q -> {
+                // Android 10
+                backgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }
+            else -> {
+                // Android 11 以上：引導至設定頁面
+                AlertDialog.Builder(this)
+                    .setTitle("需要背景定位")
+                    .setMessage("Android 11 以上版本需至設定頁面手動開啟[背景定位] \n位置權限 -> 一率允許")
+                    .setPositiveButton("前往設定") { _, _ ->
+                        val intent = Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.fromParts("package", packageName, null)
+                        )
+                        startActivity(intent)
+                    }
+                    .setNegativeButton("取消", null)
+                    .show()
+            }
         }
+    }
+
+    private fun startLocationService() {
+        val serviceIntent = Intent(this, LocationUpdateService::class.java)
+        ContextCompat.startForegroundService(this, serviceIntent)
     }
 
     private fun showAddSharedUserDialog() {
