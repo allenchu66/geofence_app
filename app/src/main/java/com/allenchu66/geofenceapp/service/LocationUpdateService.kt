@@ -7,6 +7,7 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.allenchu66.geofenceapp.R
 import com.google.android.gms.location.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -24,7 +25,7 @@ class LocationUpdateService : Service() {
 
     private fun startForegroundService() {
         val channelId = "location_channel"
-        val channelName = "Location Updates"
+        val channelName = "定位更新"
         val notificationManager = getSystemService(NotificationManager::class.java)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
@@ -32,9 +33,9 @@ class LocationUpdateService : Service() {
         }
 
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Tracking location")
-            .setContentText("Your location is being updated in background")
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentTitle("更新定位")
+            .setContentText("您的位置會在背景更新")
+            .setSmallIcon(R.drawable.ic_geofence_icon)
             .build()
 
         startForeground(
@@ -47,8 +48,7 @@ class LocationUpdateService : Service() {
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 300_000L).build() //5 min
-
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30_000L).build() //30s
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val location = result.lastLocation ?: return
@@ -76,4 +76,9 @@ class LocationUpdateService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // 如果服務被系統終止，儘量自動重啟
+        return START_STICKY
+    }
 }

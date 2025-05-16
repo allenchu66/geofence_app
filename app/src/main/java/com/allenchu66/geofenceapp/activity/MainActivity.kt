@@ -2,6 +2,7 @@ package com.allenchu66.geofenceapp.activity
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -296,6 +297,14 @@ class MainActivity : AppCompatActivity() {
 
     /**背景定位權限*/
     private fun requestBackgroundLocation() {
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            startLocationService()
+            return
+        }
         when {
             Build.VERSION.SDK_INT < Build.VERSION_CODES.Q -> {
                 // Android 9 以下
@@ -311,11 +320,7 @@ class MainActivity : AppCompatActivity() {
                     .setTitle("需要背景定位")
                     .setMessage("Android 11 以上版本需至設定頁面手動開啟[背景定位] \n位置權限 -> 一率允許")
                     .setPositiveButton("前往設定") { _, _ ->
-                        val intent = Intent(
-                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.fromParts("package", packageName, null)
-                        )
-                        startActivity(intent)
+                        backgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
                     }
                     .setNegativeButton("取消", null)
                     .show()
