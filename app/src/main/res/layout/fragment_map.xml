@@ -11,7 +11,6 @@
         android:layout_height="match_parent" />
 
     <!-- Bottom Sheet -->
-    <!-- Bottom Sheet -->
     <LinearLayout
         android:id="@+id/bottom_sheet"
         android:layout_width="match_parent"
@@ -24,7 +23,6 @@
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
 
         <!-- User Header -->
-        <!-- 原本的 User Header -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -50,30 +48,43 @@
 
                 <TextView
                     android:id="@+id/text_user_name"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    app:autoSizeMaxTextSize="16sp"
+                    app:autoSizeMinTextSize="10sp"
+                    app:autoSizeStepGranularity="1sp"
+                    app:autoSizeTextType="uniform"
+                    android:singleLine="true"
                     android:text="Display Name"
                     android:textColor="?attr/colorOnSurface"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    />
 
                 <TextView
                     android:id="@+id/text_user_email"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    app:autoSizeMaxTextSize="14sp"
+                    app:autoSizeMinTextSize="8sp"
+                    app:autoSizeTextType="uniform"
+                    app:autoSizeStepGranularity="1sp"
+                    android:singleLine="true"
                     android:text="user@example.com"
-                    android:textSize="14sp"
-                    android:textColor="?attr/colorOnSurface"/>
+                    android:textColor="?attr/colorOnSurface" />
 
                 <!-- 新增：最後更新時間 -->
                 <TextView
                     android:id="@+id/text_update_time"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:autoSizeMaxTextSize="12sp"
+                    android:autoSizeMinTextSize="8sp"
+                    android:autoSizeTextType="uniform"
+                    app:autoSizeStepGranularity="1sp"
+                    android:singleLine="true"
                     android:text="更新於 --"
-                    android:textSize="12sp"
-                    android:textColor="?attr/colorOnSurface"
-                    android:layout_marginTop="4dp"/>
+                    android:textColor="?attr/colorOnSurface" />
             </LinearLayout>
 
             <Button
@@ -106,16 +117,16 @@
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:scrollbars="none"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="8dp"
+            android:scrollbars="none">
 
             <com.google.android.material.chip.ChipGroup
                 android:id="@+id/chipGroupGeofences"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                app:singleSelection="true"
+                app:chipSpacing="8dp"
                 app:selectionRequired="true"
-                app:chipSpacing="8dp">
+                app:singleSelection="true">
 
                 <!-- Chip 會透過程式碼動態加入 -->
             </com.google.android.material.chip.ChipGroup>
@@ -126,7 +137,7 @@
         <ScrollView
             android:id="@+id/layoutGeofenceConfig"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:fillViewport="true"
             android:visibility="gone">
 
@@ -136,32 +147,26 @@
                 android:orientation="vertical">
 
                 <!-- Fence Name -->
-                <LinearLayout
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:layout_weight="2"
+                    android:hint="地點名稱"
+                    app:boxBackgroundMode="outline"
+                    app:boxStrokeColor="@color/colorPrimary"
+                    app:boxStrokeWidth="1dp"
+                    app:boxStrokeWidthFocused="2dp">
 
-                    <TextView
-                        android:id="@+id/tvGeofenceLocationNameTitle"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="地點名稱:"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textSize="14sp" />
-
-                    <EditText
+                    <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/etGeofenceLocationName"
-                        android:layout_width="0dp"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="2"
-                        android:hint="default"
                         android:padding="8dp"
-                        android:textSize="14sp"
-                        android:textColor="@color/black"/>
-                </LinearLayout>
+                        android:textColor="@color/black"
+                        android:textSize="14sp" />
+                </com.google.android.material.textfield.TextInputLayout>
+
 
                 <!-- Lat/Lng + Edit Button -->
                 <LinearLayout
@@ -186,7 +191,7 @@
                         android:layout_height="wrap_content"
                         android:text="編輯位置"
                         android:textAllCaps="false"
-                        android:visibility="gone"/>
+                        android:visibility="gone" />
                 </LinearLayout>
 
                 <!-- Radius + Slider -->
@@ -235,10 +240,10 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
                         android:text="觸發事件："
                         android:textColor="?attr/colorOnSurface"
-                        android:textSize="14sp"
-                        android:layout_marginEnd="8dp"/>
+                        android:textSize="14sp" />
 
                     <com.google.android.material.chip.ChipGroup
                         android:id="@+id/chipGroupTransitions"
