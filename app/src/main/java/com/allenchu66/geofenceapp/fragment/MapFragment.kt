@@ -116,17 +116,8 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         val factory = MapViewModelFactory(repository)
         mapViewModel = ViewModelProvider(this, factory)[MapViewModel::class.java]
 
-        val db = Room.databaseBuilder(
-            requireContext().applicationContext,
-            GeofenceDatabase::class.java,
-            "app_db"
-        ).build()
-
-        val geofenceLocalRepo = GeofenceLocalRepository(db.geofenceDao())
-
-        val geofenceRepo = GeofenceRepository()
         val geofenceViewModelFactory =
-            GeofenceViewModelFactory(requireActivity().application, geofenceLocalRepo, geofenceRepo)
+            GeofenceViewModelFactory(requireActivity().application)
         geofenceViewModel =
             ViewModelProvider(this, geofenceViewModelFactory).get(GeofenceViewModel::class.java)
 
@@ -586,10 +577,10 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 geofenceViewModel.uploadGeofence(
                     fenceId = savedGeofenceData?.fenceId,
                     ownerUid = sharedUser.uid,
-                    lat = center.latitude,
-                    lng = center.longitude,
+                    latitude = center.latitude,
+                    longitude = center.longitude,
                     radius = radius,
-                    name = nameInput,
+                    locationName = nameInput,
                     transition = transitions,
                     onSuccess = { returnedFenceId ->
                         currentFenceId = returnedFenceId

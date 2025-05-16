@@ -7,14 +7,11 @@ import com.allenchu66.geofenceapp.repository.GeofenceLocalRepository
 import com.allenchu66.geofenceapp.repository.GeofenceRepository
 
 class GeofenceViewModelFactory(
-    private val application: Application,
-    private val localRepo : GeofenceLocalRepository,
-    private val repository: GeofenceRepository,
-) : ViewModelProvider.Factory {
+    private val application: Application) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(GeofenceViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return GeofenceViewModel(application, localRepo,repository) as T
+            return GeofenceViewModel(application) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
