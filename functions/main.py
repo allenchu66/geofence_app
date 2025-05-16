@@ -20,14 +20,14 @@ def on_geofence_event(event: firestore_fn.Event[firestore.DocumentSnapshot]):
         fenceId = data.get("fenceId")
         action = data.get("action")
         targetUid = data.get("targetUid") #要被發送通知的人
-        print(f"👮 [Target UID] {targetUid}")
+        print(f"[Target UID] {targetUid}")
 
         if not (fenceId and action and targetUid):
             print("⚠️ [Skip] Missing fenceId/action/targetUid")
             return
 
-        print(f"👮 [Owner UID] 觸發者 {ownerUid}")
-        print(f"📍 [Fence ID] {fenceId}, [Action] {action}, [TargetUid UID] {targetUid}")
+        print(f"[Owner UID] 觸發者 {ownerUid}")
+        print(f"[Fence ID] {fenceId}, [Action] {action}, [TargetUid UID] {targetUid}")
 
         # 2. 查 geofence config
         cfgSnap = firestore.client() \
@@ -38,11 +38,11 @@ def on_geofence_event(event: firestore_fn.Event[firestore.DocumentSnapshot]):
             .get()
 
         if not cfgSnap.exists:
-            print("❌ [Error] Geofence config not found")
+            print("[Error] Geofence config not found")
             return
 
         cfgData = cfgSnap.to_dict() or {}
-        print(f"📄 [Geofence Config] {cfgData}")
+        print(f"[Geofence Config] {cfgData}")
 
         targetSnap = firestore.client() \
                     .collection("users") \
@@ -53,7 +53,7 @@ def on_geofence_event(event: firestore_fn.Event[firestore.DocumentSnapshot]):
         token = targetData.get("fcmToken")
 
         if not token:
-            print("❌ [Error] No FCM token found")
+            print("[Error] No FCM token found")
             return
         print("接收通知者 email:"+targetData.get("email"))
         print("接收通知者 name:"+targetData.get("displayName"))
@@ -65,18 +65,18 @@ def on_geofence_event(event: firestore_fn.Event[firestore.DocumentSnapshot]):
             .get()
 
         if not userSnap.exists:
-            print(f"❌ [Error] User snapshot for {ownerUid} not found")
+            print(f"[Error] User snapshot for {ownerUid} not found")
             return
 
         userData = userSnap.to_dict() or {}
-        print(f"🙋 [觸發者 Data] {userData}")
+        print(f"[觸發者 Data] {userData}")
 
         userNickName = userData.get("displayName", "未知使用者")
         photoUri = userData.get("photoUri")
 
         # 4. 發送通知
         notifyTitle = f"地理圍籬：{userNickName}{'進入' if action == 'enter' else '離開'} {locationName or ''}"
-        print(f"📢 [Sending FCM] Title: {notifyTitle}")
+        print(f"[Sending FCM] Title: {notifyTitle}")
 
         message = messaging.Message(
             token=token,
@@ -94,17 +94,17 @@ def on_geofence_event(event: firestore_fn.Event[firestore.DocumentSnapshot]):
 
         try:
             response = messaging.send(message)
-            print(f"✅ [FCM Sent] {response}")
+            print(f"[FCM Sent] {response}")
         except exceptions.FirebaseError as e:
             # 所有從 Firebase Admin SDK 層級包裝過的錯誤
-            print(f"⚠️ [FirebaseError] {e}")
+            print(f"⚠[FirebaseError] {e}")
             # 如果裡面 message 或 code 有「NotFound」、或「invalid-argument」字樣，就清掉 token
             if "not found" in str(e).lower() or "invalid-argument" in str(e).lower():
                 firestore.client() \
                     .collection("users") \
                     .document(targetUid) \
                     .update({"fcmToken": firestore.DELETE_FIELD})
-                print(f"🗑️ 清除了 {targetUid} 的失效 token")
+                print(f"清除了 {targetUid} 的失效 token")
 
     except Exception as e:
-        print(f"🔥 [Unhandled Exception] {e}")
+        print(f"[Unhandled Exception] {e}")

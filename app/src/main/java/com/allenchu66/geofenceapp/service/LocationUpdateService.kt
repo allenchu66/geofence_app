@@ -36,6 +36,8 @@ class LocationUpdateService : Service() {
             .setContentTitle("更新定位")
             .setContentText("您的位置會在背景更新")
             .setSmallIcon(R.drawable.ic_geofence_icon)
+            .setOngoing(true)       // → 防止使用者滑掉
+            .setAutoCancel(false)   // → 不自動取消
             .build()
 
         startForeground(

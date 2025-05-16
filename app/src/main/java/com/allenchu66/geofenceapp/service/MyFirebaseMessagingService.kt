@@ -71,7 +71,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         if (photoUri == null) {
             val notif = NotificationCompat.Builder(this, channelId)
                 .setContentTitle(title)
-                .setSmallIcon(R.drawable.ic_app_icon)
+                .setSmallIcon(R.drawable.ic_geofence_icon)
                 .build()
             nm.notify(System.currentTimeMillis().toInt(), notif)
             return
@@ -89,7 +89,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
                 val notif = NotificationCompat.Builder(this@MyFirebaseMessagingService, channelId)
                     .setContentTitle(title)
-                    .setSmallIcon(R.drawable.ic_app_icon)
+                    .setSmallIcon(R.drawable.ic_geofence_icon)
                     .setLargeIcon(bitmap)
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setCategory(NotificationCompat.CATEGORY_MESSAGE)

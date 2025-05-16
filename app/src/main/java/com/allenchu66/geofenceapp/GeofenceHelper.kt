@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.allenchu66.geofenceapp.model.GeofenceData
+import com.allenchu66.geofenceapp.receiver.GeofenceBroadcastReceiver
 import com.allenchu66.geofenceapp.repository.GeofenceLocalRepository
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingRequest

@@ -1,4 +1,4 @@
-package com.allenchu66.geofenceapp
+package com.allenchu66.geofenceapp.receiver
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -9,12 +9,12 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.room.Room
+import com.allenchu66.geofenceapp.R
 import com.allenchu66.geofenceapp.database.GeofenceDatabase
 import com.allenchu66.geofenceapp.repository.GeofenceLocalRepository
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingEvent
 import com.google.firebase.Firebase
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
 import kotlinx.coroutines.CoroutineScope
