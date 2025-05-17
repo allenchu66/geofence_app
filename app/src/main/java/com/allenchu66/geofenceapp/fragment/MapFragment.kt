@@ -21,6 +21,7 @@ import android.util.StateSet
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -30,14 +31,11 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.ViewModelProvider
-import androidx.room.Room
 import com.allenchu66.geofenceapp.R
-import com.allenchu66.geofenceapp.database.GeofenceDatabase
+
 import com.allenchu66.geofenceapp.databinding.FragmentMapBinding
 import com.allenchu66.geofenceapp.model.GeofenceData
 import com.allenchu66.geofenceapp.model.SharedUser
-import com.allenchu66.geofenceapp.repository.GeofenceLocalRepository
-import com.allenchu66.geofenceapp.repository.GeofenceRepository
 import com.allenchu66.geofenceapp.repository.LocationRepository
 import com.allenchu66.geofenceapp.repository.SharedUserRepository
 import com.allenchu66.geofenceapp.viewModel.GeofenceViewModel
@@ -71,6 +69,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
     private var _binding: FragmentMapBinding? = null
     private val binding get() = _binding!!
+
     private lateinit var googleMap: GoogleMap
     private lateinit var mapViewModel: MapViewModel
 
@@ -110,16 +109,8 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-
-        // 初始化 ViewModel
-        val repository = LocationRepository()
-        val factory = MapViewModelFactory(repository)
-        mapViewModel = ViewModelProvider(this, factory)[MapViewModel::class.java]
-
-        val geofenceViewModelFactory =
-            GeofenceViewModelFactory(requireActivity().application)
-        geofenceViewModel =
-            ViewModelProvider(this, geofenceViewModelFactory).get(GeofenceViewModel::class.java)
+        initMapViewModel()
+        initGeofenceViewMode()
 
         sharedUserVM.loadSharedUsers()
         sharedUserVM.sharedUsers.observe(viewLifecycleOwner) { users ->
@@ -135,9 +126,74 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         }
 
         // 初始化地圖 Fragment
-        val mapFragment =
-            childFragmentManager.findFragmentById(R.id.mapFragment) as SupportMapFragment
+        val mapFragment = childFragmentManager.findFragmentById(R.id.mapFragment) as SupportMapFragment
         mapFragment.getMapAsync(this)
+        //定時上傳現在位置到firestore
+        setUploadCurrentLocationTimer()
+
+        setUpBottomSheet()
+
+        checkFirebaseMessageToken()
+
+        // 地圖就緒後載入共享好友位置
+        FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+            mapViewModel.loadSharedLocations(uid)
+            geofenceViewModel.loadIncomingGeofences()
+        }
+    }
+
+    private fun setUpBottomSheet(){
+        sheetBehavior = BottomSheetBehavior.from(binding.bottomSheet as LinearLayout)
+        sheetBehavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
+            override fun onStateChanged(bottomSheet: View, newState: Int) {
+                val bottomPadding = if (newState == BottomSheetBehavior.STATE_EXPANDED) {
+                    bottomSheet.height
+                } else {
+                    0
+                }
+                googleMap.setPadding(0, 0, 0, bottomPadding)
+                if (newState == BottomSheetBehavior.STATE_HIDDEN) {
+                    // 清除地理圍欄標記與圓圈
+                    geofenceMarker?.remove()
+                    geofenceMarker = null
+                    geofenceCircle?.remove()
+                    geofenceCircle = null
+                    // 如果你有存 savedGeofenceData，也可以一併清除
+                    savedGeofenceData = null
+                    currentFenceId = null
+                    currentSharedUserUid = null
+                }
+            }
+
+            override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                // 也可以在滑動時跟著 slotOffset 動態更新
+                adjustMapPadding(bottomSheet, slideOffset)
+            }
+        })
+        sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+
+        binding.btnCloseSheet.setOnClickListener {
+            sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+        }
+    }
+
+    private fun setUploadCurrentLocationTimer(){
+        // 定時上傳自己的位置
+        locationUpdateRunnable = object : Runnable {
+            @SuppressLint("MissingPermission")
+            override fun run() {
+                getCurrentLocationAndUpload()
+                handler.postDelayed(this, UPDATE_INTERVAL_MS)
+            }
+        }
+        handler.post(locationUpdateRunnable)
+    }
+
+    private fun initMapViewModel(){
+        // 初始化 ViewModel
+        val repository = LocationRepository()
+        val factory = MapViewModelFactory(repository)
+        mapViewModel = ViewModelProvider(this, factory)[MapViewModel::class.java]
 
         // 觀察共享好友位置資料
         mapViewModel.sharedLocations.observe(viewLifecycleOwner) { locations ->
@@ -166,59 +222,16 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     .let { ts -> binding.textUpdateTime.text }
             }
         }
+    }
 
-        // 定時上傳自己的位置
-        locationUpdateRunnable = object : Runnable {
-            @SuppressLint("MissingPermission")
-            override fun run() {
-                getCurrentLocationAndUpload()
-                handler.postDelayed(this, UPDATE_INTERVAL_MS)
-            }
-        }
-        handler.post(locationUpdateRunnable)
-
-        sheetBehavior = BottomSheetBehavior.from(binding.bottomSheet)
-        sheetBehavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
-            override fun onStateChanged(bottomSheet: View, newState: Int) {
-                val bottomPadding = if (newState == BottomSheetBehavior.STATE_EXPANDED) {
-                    bottomSheet.height
-                } else {
-                    0
-                }
-                googleMap.setPadding(0, 0, 0, bottomPadding)
-                if (newState == BottomSheetBehavior.STATE_HIDDEN) {
-                    // 清除地理圍欄標記與圓圈
-                    geofenceMarker?.remove()
-                    geofenceMarker = null
-                    geofenceCircle?.remove()
-                    geofenceCircle = null
-                    // 如果你有存 savedGeofenceData，也可以一併清除
-                    savedGeofenceData = null
-                    currentFenceId = null
-                    currentSharedUserUid = null
-                }
-            }
-
-            override fun onSlide(bottomSheet: View, slideOffset: Float) {
-                // 也可以在滑動時跟著 slotOffset 動態更新
-                adjustMapPadding(bottomSheet, slideOffset)
-            }
-        })
-        sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
-        binding.btnCloseSheet.setOnClickListener {
-            sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
-        }
+    private fun initGeofenceViewMode(){
+        val geofenceViewModelFactory =
+            GeofenceViewModelFactory(requireActivity().application)
+        geofenceViewModel =
+            ViewModelProvider(this, geofenceViewModelFactory).get(GeofenceViewModel::class.java)
 
         geofenceViewModel.ownerGeofences.observe(viewLifecycleOwner) { fences ->
             setGeofenceSettingUI(fences)
-        }
-
-        checkFirebaseMessageToken()
-
-        // 地圖就緒後載入共享好友位置
-        FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
-            mapViewModel.loadSharedLocations(uid)
-            geofenceViewModel.loadIncomingGeofences()
         }
     }
 
@@ -339,8 +352,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         isConfigVisible = false
     }
 
-
-    fun createNewGeofence() {
+    private fun createNewGeofence() {
         binding.layoutGeofenceConfig.visibility = View.VISIBLE
         binding.btnSetGeofence.visibility = View.GONE
 
@@ -367,7 +379,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         }
     }
 
-    fun displayGeofenceDetails(geofence: GeofenceData) {
+    private fun displayGeofenceDetails(geofence: GeofenceData) {
         currentFenceId = geofence.fenceId
 
         savedGeofenceData = geofence
@@ -406,7 +418,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         )
         return "更新於 $relative"
     }
-
 
     private fun checkFirebaseMessageToken() {
         FirebaseMessaging.getInstance().token
@@ -480,8 +491,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             binding.btnSetGeofence.visibility = View.GONE
             binding.textUpdateTime.visibility = View.GONE
         }
-
-
 
         binding.apply {
             // Avatar
@@ -637,7 +646,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         }
     }
 
-
     private fun addOrResetGeofence(center: LatLng, radius: Float) {
         // 移除舊的
         geofenceMarker?.remove()
@@ -666,7 +674,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         geofenceCircle?.radius = radius
         binding.tvGeofenceRadius.text = "${radius} m"
     }
-
 
     override fun onMapReady(map: GoogleMap) {
         googleMap = map
@@ -829,8 +836,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         })
     }
 
-
-
     private fun getMarkerBitmapFromView(photo: Bitmap,isOffline: Boolean): Bitmap {
         // Inflate
         var layout_id: Int? = null
@@ -858,7 +863,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         view.draw(canvas)
         return bitmap
     }
-
 
     // 權限處理結果回調
     @SuppressLint("MissingPermission")
