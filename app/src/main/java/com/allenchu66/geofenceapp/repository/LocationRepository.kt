@@ -14,6 +14,7 @@ class LocationRepository {
     private val firestore = FirebaseFirestore.getInstance()
 
     fun uploadLocation(userId: String, lat: Double, lng: Double) {
+        val now = System.currentTimeMillis().toString()
         val locationData = hashMapOf(
             "user_id" to userId,
             "latitude" to lat,
@@ -21,9 +22,11 @@ class LocationRepository {
             "timestamp" to FieldValue.serverTimestamp()
         )
 
-        firestore.collection("locations").document(userId)
+        firestore.collection("locations")
+            .document(userId)
             .collection("history")
-            .add(locationData)
+            .document(now)
+            .set(locationData)
             .addOnSuccessListener { Log.d("LocationUpload", "Success") }
             .addOnFailureListener { e -> Log.e("LocationUpload", "Error", e) }
     }

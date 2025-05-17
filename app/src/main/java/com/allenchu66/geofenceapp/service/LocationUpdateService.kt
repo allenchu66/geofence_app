@@ -55,16 +55,19 @@ class LocationUpdateService : Service() {
             override fun onLocationResult(result: LocationResult) {
                 val location = result.lastLocation ?: return
                 val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+                val now = System.currentTimeMillis().toString()
                 val data = hashMapOf(
                     "user_id" to uid,
                     "latitude" to location.latitude,
                     "longitude" to location.longitude,
                     "timestamp" to Date()
                 )
-                FirebaseFirestore.getInstance().collection("locations")
+                FirebaseFirestore.getInstance()
+                    .collection("locations")
                     .document(uid)
                     .collection("history")
-                    .add(data)
+                    .document(now)
+                    .set(data)
                     .addOnSuccessListener { Log.d("LocationService", "Location uploaded") }
                     .addOnFailureListener { Log.e("LocationService", "Upload failed", it) }
             }
