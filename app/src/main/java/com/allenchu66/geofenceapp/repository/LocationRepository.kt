@@ -8,6 +8,7 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 
 class LocationRepository {
     private val firestore = FirebaseFirestore.getInstance()
@@ -21,7 +22,8 @@ class LocationRepository {
         )
 
         firestore.collection("locations").document(userId)
-            .set(locationData)
+            .collection("history")
+            .add(locationData)
             .addOnSuccessListener { Log.d("LocationUpload", "Success") }
             .addOnFailureListener { e -> Log.e("LocationUpload", "Error", e) }
     }
@@ -63,19 +65,22 @@ class LocationRepository {
                         }
                     firestore.collection("locations")
                         .document(uid)
-                        .addSnapshotListener { locSnap, error ->
-                            Log.d("Repo-LocSnap", "uid=$uid exists=${locSnap?.exists()} err=$error")
-                            if (locSnap != null && locSnap.exists()) {
-                                val lat = locSnap.getDouble("latitude") ?: return@addSnapshotListener
-                                val lng = locSnap.getDouble("longitude") ?: return@addSnapshotListener
-                                val ts  = locSnap.getTimestamp("timestamp")
+                        .collection("history")
+                        .orderBy("timestamp", Query.Direction.DESCENDING)
+                        .limit(1)
+                        .addSnapshotListener { historySnap, error ->
+                            if (error != null || historySnap == null) return@addSnapshotListener
 
-                                locationMap[uid] = LatLng(lat, lng)
-                                timestampMap[uid] = ts
+                            val doc = historySnap.documents.firstOrNull() ?: return@addSnapshotListener
+                            val lat = doc.getDouble("latitude") ?: return@addSnapshotListener
+                            val lng = doc.getDouble("longitude") ?: return@addSnapshotListener
+                            val ts  = doc.getTimestamp("timestamp")
 
-                                Log.d("Repo-Location", "for $uid -> $lat,$lng $timestampMap")
-                                emitSharedLocations(onUpdate, userMap, locationMap, timestampMap)
-                            }
+                            locationMap[uid] = LatLng(lat, lng)
+                            timestampMap[uid] = ts
+
+                            Log.d("Repo-Location", "for $uid -> $lat,$lng $timestampMap")
+                            emitSharedLocations(onUpdate, userMap, locationMap, timestampMap)
                         }
                 }
             }

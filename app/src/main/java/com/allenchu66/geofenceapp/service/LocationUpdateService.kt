@@ -63,7 +63,8 @@ class LocationUpdateService : Service() {
                 )
                 FirebaseFirestore.getInstance().collection("locations")
                     .document(uid)
-                    .set(data)
+                    .collection("history")
+                    .add(data)
                     .addOnSuccessListener { Log.d("LocationService", "Location uploaded") }
                     .addOnFailureListener { Log.e("LocationService", "Upload failed", it) }
             }

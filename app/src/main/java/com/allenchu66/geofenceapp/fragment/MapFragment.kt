@@ -710,6 +710,8 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 tvTitle.text = marker.title
                 tvSnippet.text = marker.snippet
 
+                Log.d("20250517",marker.title+" , "+marker.snippet)
+
                 (marker.tag as? String)?.let { url ->
                     Glide.with(view)
                         .load(url)

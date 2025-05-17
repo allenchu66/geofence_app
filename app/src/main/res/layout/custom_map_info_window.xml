@@ -2,7 +2,8 @@
     android:orientation="horizontal"
     android:padding="8dp"
     android:layout_width="wrap_content"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical">
     <ImageView
         android:id="@+id/ivAvatar"
         android:layout_width="40dp"
@@ -16,10 +17,12 @@
             android:id="@+id/tvTitle"
             android:textStyle="bold"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorPrimary"/>
         <TextView
             android:id="@+id/tvSnippet"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorPrimary"/>
     </LinearLayout>
 </LinearLayout>

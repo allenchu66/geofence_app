@@ -25,6 +25,7 @@ import com.allenchu66.geofenceapp.repository.GeofenceLocalRepository
 import com.bumptech.glide.Glide
 import com.canhub.cropper.CropImageOptions
 import com.canhub.cropper.CropImageView
+import com.google.android.material.appbar.MaterialToolbar
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
@@ -157,6 +158,10 @@ class AccountSettingsFragment : Fragment() {
 
         binding.accountImage.setOnClickListener {
            pickImage.launch("image/*")
+        }
+
+        binding.toolbar.setNavigationOnClickListener {
+            findNavController().navigateUp()
         }
     }
 

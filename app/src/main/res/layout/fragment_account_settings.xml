@@ -1,72 +1,113 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:padding="24dp">
+    android:fitsSystemWindows="true">
 
-    <LinearLayout
-        android:orientation="vertical"
+    <!-- App Bar + 返回按鈕 -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="?attr/actionBarSize"
+        app:title="Settings"
+        app:titleTextAppearance="@style/TextAppearance.MaterialComponents.Headline6"
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:navigationContentDescription="Back"
+        android:background="?attr/colorPrimary"
+        app:titleTextColor="@android:color/white"
+        />
 
-        <FrameLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center">
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="?attr/actionBarSize"
+        android:padding="24dp"
+        android:fitsSystemWindows="false">
 
-            <com.google.android.material.imageview.ShapeableImageView
-                android:id="@+id/account_image"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
-                android:src="@drawable/ic_default_avatar"
-                android:background="@drawable/circle_background"
-                app:strokeColor="@color/white"
-                app:strokeWidth="1dp"/>
-
-            <!-- 編輯圖示 -->
-            <ImageView
-                android:id="@+id/ivEditOverlay"
-                android:layout_width="35dp"
-                android:layout_height="35dp"
-                android:layout_gravity="bottom|end"
-                android:layout_margin="5dp"
-                android:src="@drawable/baseline_edit_24"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:padding="4dp"
-                app:tint="@color/white"
-                android:contentDescription="Change profile photo" />
-        </FrameLayout>
-
-        <TextView
-            android:id="@+id/textEmail"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Email"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
-
-        <EditText
-            android:id="@+id/textNickname"
+        <LinearLayout
+            android:orientation="vertical"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Nickname"
-            android:layout_marginBottom="16dp" />
+            android:gravity="center_horizontal">
 
-        <Button
-            android:id="@+id/btnSave"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Save" />
+            <!-- 大頭貼 -->
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp">
 
-        <Button
-            android:id="@+id/btnLogout"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Logout"
-            android:layout_marginTop="16dp"
-            android:textColor="#ffffff"
-            android:background="#d32f2f"/>
-    </LinearLayout>
-</ScrollView>
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/account_image"
+                    android:layout_width="100dp"
+                    android:layout_height="100dp"
+                    android:src="@drawable/ic_default_avatar"
+                    android:background="@drawable/circle_background"
+                    app:strokeColor="@color/transparent"
+                    app:strokeWidth="2dp" />
+
+                <ImageView
+                    android:id="@+id/ivEditOverlay"
+                    android:layout_width="35dp"
+                    android:layout_height="35dp"
+                    android:layout_gravity="bottom|end"
+                    android:layout_margin="4dp"
+                    android:src="@drawable/baseline_edit_24"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:padding="4dp"
+                    app:tint="@android:color/white"
+                    android:contentDescription="Change profile photo"/>
+            </FrameLayout>
+
+            <!-- Email 顯示 -->
+            <TextView
+                android:id="@+id/textEmail"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="user@example.com"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp"
+                android:textColor="@color/colorPrimary"/>
+
+            <!-- Nickname 輸入 -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="顯示名稱"
+                app:boxStrokeWidth="2dp"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="@color/colorPrimary"
+                app:hintTextColor="@color/colorPrimary"
+                android:layout_marginBottom="24dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/textNickname"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPersonName"
+                    android:textColor="@color/black"
+                    android:textColorHint="@color/black" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- 儲存按鈕 -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSave"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Save"
+                android:layout_marginBottom="16dp"/>
+
+            <!-- 登出按鈕 -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLogout"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Logout"
+                app:strokeWidth="2dp"/>
+        </LinearLayout>
+    </ScrollView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
