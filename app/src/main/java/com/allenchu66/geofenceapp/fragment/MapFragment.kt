@@ -143,7 +143,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     }
 
     private fun setUpBottomSheet(){
-        sheetBehavior = BottomSheetBehavior.from(binding.bottomSheet as LinearLayout)
+        sheetBehavior = BottomSheetBehavior.from(binding.includeBottomSheet.bottomSheet)
         sheetBehavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
             override fun onStateChanged(bottomSheet: View, newState: Int) {
                 val bottomPadding = if (newState == BottomSheetBehavior.STATE_EXPANDED) {
@@ -172,7 +172,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         })
         sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
 
-        binding.btnCloseSheet.setOnClickListener {
+        binding.includeBottomSheet.btnCloseSheet.setOnClickListener {
             sheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
         }
     }
@@ -219,7 +219,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
             currentSharedUserUid?.let { uid ->
                 locations.firstOrNull { it.uid == uid }?.timestamp
-                    .let { ts -> binding.textUpdateTime.text }
+                    .let { ts -> binding.includeBottomSheet.textUpdateTime.text }
             }
         }
     }
@@ -240,7 +240,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         geofences.forEachIndexed { index, geofence ->
             val chip = layoutInflater.inflate(
                 R.layout.custom_chip,
-                binding.chipGroupGeofences,
+                binding.includeBottomSheet.chipGroupGeofences,
                 false
             ) as Chip
             chip.text = geofence.locationName
@@ -294,12 +294,12 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 true
             }
 
-            binding.chipGroupGeofences.addView(chip)
+            binding.includeBottomSheet.chipGroupGeofences.addView(chip)
         }
         // 在最後新增 "+" Chip
         val addChip = layoutInflater.inflate(
             R.layout.custom_chip,
-            binding.chipGroupGeofences,
+            binding.includeBottomSheet.chipGroupGeofences,
             false
         ) as Chip
         addChip.text = "+"
@@ -309,17 +309,17 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         addChip.setOnClickListener {
             createNewGeofence()
         }
-        binding.chipGroupGeofences.addView(addChip)
+        binding.includeBottomSheet.chipGroupGeofences.addView(addChip)
     }
 
     private fun setGeofenceSettingUI(geofences: List<GeofenceData>) {
         // 先清掉前一次的 Chip
-        binding.chipGroupGeofences.removeAllViews()
+        binding.includeBottomSheet.chipGroupGeofences.removeAllViews()
 
         // 如果清單空的 → 一律顯示「設定」按鈕，按下才進入新增
         if (geofences.isEmpty()) {
-            binding.layoutGeofenceConfig.visibility = View.GONE
-            binding.btnSetGeofence.apply {
+            binding.includeBottomSheet.layoutGeofenceConfig.visibility = View.GONE
+            binding.includeBottomSheet.btnSetGeofence.apply {
                 visibility = View.VISIBLE
                 text = "設定 Geofence"
                 setOnClickListener {
@@ -332,8 +332,8 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
         // 清單非空：如果還沒按過設定按鈕，也沒選過任何 fence → 只顯示設定按鈕
         if (!isConfigVisible && currentFenceId == null) {
-            binding.layoutGeofenceConfig.visibility = View.GONE
-            binding.btnSetGeofence.apply {
+            binding.includeBottomSheet.layoutGeofenceConfig.visibility = View.GONE
+            binding.includeBottomSheet.btnSetGeofence.apply {
                 visibility = View.VISIBLE
                 text = "設定 Geofence"
                 setOnClickListener {
@@ -345,37 +345,37 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         }
 
         // 到這裡表示「已進入設定模式」(isConfigVisible) or 「正在編輯現有 fence」(currentFenceId!=null)
-        binding.btnSetGeofence.visibility = View.GONE
-        binding.layoutGeofenceConfig.visibility = View.VISIBLE
+        binding.includeBottomSheet.btnSetGeofence.visibility = View.GONE
+        binding.includeBottomSheet.layoutGeofenceConfig.visibility = View.VISIBLE
         loadGeofenceChips(geofences)
         // 重置這個旗標，留給下次判斷用
         isConfigVisible = false
     }
 
     private fun createNewGeofence() {
-        binding.layoutGeofenceConfig.visibility = View.VISIBLE
-        binding.btnSetGeofence.visibility = View.GONE
+        binding.includeBottomSheet.layoutGeofenceConfig.visibility = View.VISIBLE
+        binding.includeBottomSheet.btnSetGeofence.visibility = View.GONE
 
         isConfigVisible = true
         savedGeofenceData = null
         currentFenceId = null
 
-        binding.etGeofenceLocationName.setText("")
-        binding.tvLatLng.text = "緯度: -- , 經度: --"
-        binding.sliderRadius.value = DEFAULT_RADIUS
-        binding.tvGeofenceRadius.text = "${DEFAULT_RADIUS.toInt()} m"
-        binding.chipEnter.isChecked = true
-        binding.chipExit.isChecked = true
+        binding.includeBottomSheet.etGeofenceLocationName.setText("")
+        binding.includeBottomSheet.tvLatLng.text = "緯度: -- , 經度: --"
+        binding.includeBottomSheet.sliderRadius.value = DEFAULT_RADIUS
+        binding.includeBottomSheet.tvGeofenceRadius.text = "${DEFAULT_RADIUS.toInt()} m"
+        binding.includeBottomSheet.chipEnter.isChecked = true
+        binding.includeBottomSheet.chipExit.isChecked = true
 
-        binding.btnEditGeofence.performClick()
+        binding.includeBottomSheet.btnEditGeofence.performClick()
 
         Toast.makeText(requireContext(), "請設定新 Geofence 的位置", Toast.LENGTH_SHORT).show()
         updateMapPaddingToBottomSheet()
     }
 
     private fun updateMapPaddingToBottomSheet() {
-        binding.bottomSheet.post {
-            googleMap.setPadding(0, 0, 0, binding.bottomSheet.height)
+        binding.includeBottomSheet.bottomSheet.post {
+            googleMap.setPadding(0, 0, 0, binding.includeBottomSheet.bottomSheet.height)
         }
     }
 
@@ -383,15 +383,15 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         currentFenceId = geofence.fenceId
 
         savedGeofenceData = geofence
-        binding.etGeofenceLocationName.setText(geofence.locationName)
-        binding.tvLatLng.text =
+        binding.includeBottomSheet.etGeofenceLocationName.setText(geofence.locationName)
+        binding.includeBottomSheet.tvLatLng.text =
             "緯度: %.5f, 經度: %.5f".format(geofence.latitude, geofence.longitude)
-        binding.sliderRadius.value = geofence.radius
-        binding.tvGeofenceRadius.text = "${geofence.radius.toInt()} m"
+        binding.includeBottomSheet.sliderRadius.value = geofence.radius
+        binding.includeBottomSheet.tvGeofenceRadius.text = "${geofence.radius.toInt()} m"
 
         // 更新Chip狀態
-        binding.chipEnter.isChecked = geofence.transition.contains("enter")
-        binding.chipExit.isChecked = geofence.transition.contains("exit")
+        binding.includeBottomSheet.chipEnter.isChecked = geofence.transition.contains("enter")
+        binding.includeBottomSheet.chipExit.isChecked = geofence.transition.contains("exit")
 
         addOrResetGeofence(LatLng(geofence.latitude, geofence.longitude), geofence.radius)
     }
@@ -464,7 +464,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         val meUid = FirebaseAuth.getInstance().currentUser?.uid
         currentSharedUserUid = sharedUser.uid
         sheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-        binding.textUpdateTime.text = "更新時間未知"
+        binding.includeBottomSheet.textUpdateTime.text = "更新時間未知"
 
         if (sharedUser.status == "accepted") {
             val marker = markerMap[sharedUser.uid]
@@ -477,22 +477,22 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             }
             //只有accepted的才可以設定geofence
             geofenceViewModel.loadGeofencesSetByMe(sharedUser.uid)
-            binding.chipGroupGeofences.removeAllViews()
-            binding.layoutGeofenceConfig.visibility = View.GONE
-            binding.btnSetGeofence.visibility = View.VISIBLE
-            binding.textUpdateTime.visibility = View.VISIBLE
+            binding.includeBottomSheet.chipGroupGeofences.removeAllViews()
+            binding.includeBottomSheet.layoutGeofenceConfig.visibility = View.GONE
+            binding.includeBottomSheet.btnSetGeofence.visibility = View.VISIBLE
+            binding.includeBottomSheet.textUpdateTime.visibility = View.VISIBLE
             mapViewModel.sharedLocations.value
                 ?.firstOrNull { it.uid == sharedUser.uid }
                 ?.timestamp
-                .let { ts -> binding.textUpdateTime.text = convertRelativeUpdateTime(ts) }
+                .let { ts -> binding.includeBottomSheet.textUpdateTime.text = convertRelativeUpdateTime(ts) }
         } else {
-            binding.chipGroupGeofences.removeAllViews()
-            binding.layoutGeofenceConfig.visibility = View.GONE
-            binding.btnSetGeofence.visibility = View.GONE
-            binding.textUpdateTime.visibility = View.GONE
+            binding.includeBottomSheet.chipGroupGeofences.removeAllViews()
+            binding.includeBottomSheet.layoutGeofenceConfig.visibility = View.GONE
+            binding.includeBottomSheet.btnSetGeofence.visibility = View.GONE
+            binding.includeBottomSheet.textUpdateTime.visibility = View.GONE
         }
 
-        binding.apply {
+        binding.includeBottomSheet.apply {
             // Avatar
             Glide.with(this@MapFragment)
                 .load(sharedUser.photoUri)
@@ -631,7 +631,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         override fun onMarkerDrag(marker: Marker) {
             if (marker == geofenceMarker) {
                 geofenceCircle?.center = marker.position
-                binding.tvLatLng.text =
+                binding.includeBottomSheet.tvLatLng.text =
                     "緯度: %.5f, 經度: %.5f".format(
                         marker.position.latitude,
                         marker.position.longitude
@@ -672,7 +672,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
     private fun updateCircleRadius(radius: Double) {
         geofenceCircle?.radius = radius
-        binding.tvGeofenceRadius.text = "${radius} m"
+        binding.includeBottomSheet.tvGeofenceRadius.text = "${radius} m"
     }
 
     override fun onMapReady(map: GoogleMap) {
