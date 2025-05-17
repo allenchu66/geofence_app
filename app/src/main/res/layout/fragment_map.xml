@@ -13,7 +13,11 @@
     <!-- Bottom Sheet -->
     <include
         android:id="@+id/include_bottom_sheet"
-        layout="@layout/bottom_sheet"/>
+        layout="@layout/main_bottom_sheet"/>
+
+    <include
+        android:id="@+id/include_history_sheet"
+        layout="@layout/history_bottom_sheet"/>
 
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

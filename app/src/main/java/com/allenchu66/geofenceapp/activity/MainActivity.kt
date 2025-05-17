@@ -109,14 +109,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (!granted) {
-            Toast.makeText(this, "請允許顯示通知", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     private val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val user = firebaseAuth.currentUser
         updateProfileUI(user)

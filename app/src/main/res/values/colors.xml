@@ -28,4 +28,6 @@
     <color name="colorError">#B00020</color>
     <color name="colorOnError">#FFFFFF</color>
     <color name="transparent">#00FFFFFF</color>
+
+    <color name="gray">#5B5B5B</color>
 </resources>
