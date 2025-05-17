@@ -304,9 +304,10 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         ) as Chip
         addChip.text = "+"
         addChip.id = View.generateViewId()
-        addChip.isCheckable = false  // 不需要選取狀態
+        addChip.isCheckable = true
         addChip.setChipIconResource(R.drawable.ic_add)  // 可搭配icon（可選）
         addChip.setOnClickListener {
+            addChip.isChecked = true
             createNewGeofence()
         }
         binding.includeBottomSheet.chipGroupGeofences.addView(addChip)
