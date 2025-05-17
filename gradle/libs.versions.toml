@@ -22,6 +22,7 @@ glide = "4.16.0"
 firebaseMessaging = "23.1.0"
 androidx-room = "2.5.0"
 ksp = "2.1.20-1.0.32"
+timeLine="1.2.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -47,7 +48,7 @@ firebase-messaging = {group = "com.google.firebase",name = "firebase-messaging",
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "androidx-room" }
 androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "androidx-room" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "androidx-room" }
-
+timeline-view = {group = "com.github.vipulasri",name = "timelineview",version.ref = "timeLine"}
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

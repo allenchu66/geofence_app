@@ -4,15 +4,24 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:padding="8dp"
-    android:background="@color/colorPrimary">
+    android:background="@drawable/info_window_bg">
 
     <TextView
         android:id="@+id/tvTime"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="08:00 ~ 08:30"
-        android:textColor="@color/white"
+        android:textColor="@android:color/white"
         android:textSize="14sp"
         android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvLocation"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Location Name"
+        android:textColor="@android:color/white"
+        android:textSize="12sp"
+        android:layout_marginTop="4dp"/>
 
 </LinearLayout>

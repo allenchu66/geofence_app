@@ -32,7 +32,10 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.allenchu66.geofenceapp.R
+import com.allenchu66.geofenceapp.adapter.HistoryAdapter
 
 import com.allenchu66.geofenceapp.databinding.FragmentMapBinding
 import com.allenchu66.geofenceapp.model.GeofenceData
@@ -63,6 +66,7 @@ import com.google.firebase.firestore.firestore
 import com.google.firebase.messaging.FirebaseMessaging
 import java.text.SimpleDateFormat
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 class MapFragment : Fragment(), OnMapReadyCallback {
@@ -97,11 +101,13 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     private var currentFenceId: String? = null
     private var isConfigVisible = false
 
-    private var currentSharedUserUid: String? = null
+    private var currentSharedUser: SharedUser? = null
 
     private val sharedUserVM: SharedUserViewModel by activityViewModels {
         SharedUserViewModelFactory(SharedUserRepository())
     }
+
+    private lateinit var historyAdapter: HistoryAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -121,8 +127,8 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         sharedUserVM.sharedUsers.observe(viewLifecycleOwner) { users ->
             // 只有 sheet 展開時才重整 UI
             if (mainSheet.state == BottomSheetBehavior.STATE_EXPANDED) {
-                currentSharedUserUid
-                    ?.let { uid -> users.find { it.uid == uid } }
+                currentSharedUser
+                    ?.let { sharedUser -> users.find { it.uid == sharedUser.uid} }
                     ?.let { updatedUser ->
                         // 重新渲染 bottom sheet
                         expandSettingsSheet(updatedUser)
@@ -150,6 +156,9 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
     private var historyPolyline: Polyline? = null
     private val historyMarkers = mutableListOf<Marker>()
+    private var selectedDate: LocalDate = LocalDate.now()
+
+    @SuppressLint("SetTextI18n")
     private fun setUpBottomSheet() {
         mainSheet = BottomSheetBehavior.from(binding.includeBottomSheet.mainBottomSheet)
         mainSheet.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
@@ -169,7 +178,10 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     // 如果你有存 savedGeofenceData，也可以一併清除
                     savedGeofenceData = null
                     currentFenceId = null
-                    currentSharedUserUid = null
+
+                    if(historySheet.state == BottomSheetBehavior.STATE_HIDDEN) {
+                        currentSharedUser = null
+                    }
                 }
             }
 
@@ -188,12 +200,23 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         historySheet.state = BottomSheetBehavior.STATE_HIDDEN
         historySheet.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
             override fun onStateChanged(bottomSheet: View, newState: Int) {
-                if (newState == BottomSheetBehavior.STATE_HIDDEN) {
+                if (newState == BottomSheetBehavior.STATE_EXPANDED) {
+                    binding.includeHistorySheet.historyBottomSheet.post {
+                        googleMap.setPadding(
+                            0,
+                            0,
+                            0,
+                            binding.includeHistorySheet.historyBottomSheet.height
+                        )
+                    }
+                }else if (newState == BottomSheetBehavior.STATE_HIDDEN) {
                     historyPolyline?.remove()
                     historyPolyline = null
 
                     historyMarkers.forEach { it.remove() }
                     historyMarkers.clear()
+
+                    googleMap.setPadding(0, 0, 0, 0)
                 }
             }
 
@@ -205,20 +228,61 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             mainSheet.state = BottomSheetBehavior.STATE_HIDDEN
             // 展開第二個
             historySheet.state = BottomSheetBehavior.STATE_EXPANDED
-            val today = LocalDate.now()
-            currentSharedUserUid?.let { it1 ->
-                mapViewModel.loadHistoryLocations(
-                    targetUid = it1,
-                    year = today.year,
-                    month = today.monthValue,
-                    day = today.dayOfMonth
-                )
-            }
+
+            binding.includeHistorySheet.tvHistoryTitle.text = currentSharedUser?.displayName+"的定位紀錄"
+            selectedDate = LocalDate.now()
+            updateHistoryForDate()
         }
 
         binding.includeHistorySheet.btnBackHistory.setOnClickListener {
             historySheet.state = BottomSheetBehavior.STATE_HIDDEN
             mainSheet.state = BottomSheetBehavior.STATE_EXPANDED
+        }
+
+        binding.includeHistorySheet.btnPrevDay.setOnClickListener{
+            selectedDate = selectedDate.minusDays(1)
+            updateHistoryForDate()
+        }
+
+        binding.includeHistorySheet.btnNextDay.setOnClickListener{
+            selectedDate = selectedDate.plusDays(1)
+            updateHistoryForDate()
+        }
+
+        historyAdapter = HistoryAdapter(emptyList()) { item ->
+            googleMap.animateCamera(
+                CameraUpdateFactory.newLatLngZoom(item.latLng, 20f)
+            )
+
+            val marker = historyMarkers.firstOrNull {
+                it.position == item.latLng
+            }
+
+            marker?.showInfoWindow()
+        }
+
+        binding.includeHistorySheet.rvHistory.apply {
+            layoutManager = LinearLayoutManager(context, RecyclerView.VERTICAL, false)
+            this.adapter = historyAdapter
+        }
+    }
+
+    private fun updateHistoryForDate() {
+        binding.includeHistorySheet.rvHistory.visibility = View.GONE
+        binding.includeHistorySheet.tvEmptyHistory.visibility = View.VISIBLE
+        binding.includeHistorySheet.tvEmptyHistory.text = "查詢中"
+        val today = LocalDate.now()
+        binding.includeHistorySheet.btnNextDay.visibility =
+            if (selectedDate.isEqual(today)) View.INVISIBLE else View.VISIBLE
+
+        binding.includeHistorySheet.tvHistoryDate.text = selectedDate.format(DateTimeFormatter.ofPattern("MM-dd"))
+        currentSharedUser?.let { sharedUser ->
+            mapViewModel.loadHistoryLocations(
+                targetUid = sharedUser.uid,
+                year = selectedDate.year,
+                month = selectedDate.monthValue,
+                day = selectedDate.dayOfMonth
+            )
         }
     }
 
@@ -237,14 +301,14 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
     private val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
 
-    private fun formatHourMinute(ts: com.google.firebase.Timestamp): String {
+    private fun formatHourMinute(ts: Timestamp): String {
         return timeFormatter.format(ts.toDate())
     }
 
     private fun initMapViewModel() {
         // 初始化 ViewModel
         val repository = LocationRepository()
-        val factory = MapViewModelFactory(repository)
+        val factory = MapViewModelFactory(requireActivity().application,repository)
         mapViewModel = ViewModelProvider(this, factory)[MapViewModel::class.java]
 
         // 觀察共享好友位置資料
@@ -269,22 +333,25 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 }
             }
 
-            currentSharedUserUid?.let { uid ->
-                locations.firstOrNull { it.uid == uid }?.timestamp
+            currentSharedUser?.let { sharedUser ->
+                locations.firstOrNull { it.uid == sharedUser.uid }?.timestamp
                     .let { ts -> binding.includeBottomSheet.textUpdateTime.text }
             }
         }
 
-        mapViewModel.historyLocations.observe(viewLifecycleOwner) { historyList ->
+        mapViewModel.historyWithAddress.observe(viewLifecycleOwner) { historyList ->
             Log.d("20250517", historyList.size.toString())
             // 只有當歷史 Sheet 展開時，才畫軌跡
             if (historySheet.state == BottomSheetBehavior.STATE_EXPANDED) {
+                historyAdapter.updateList(historyList)
                 // 移除舊的
                 historyPolyline?.remove()
                 historyMarkers.forEach { it.remove() }
                 historyMarkers.clear()
 
                 if (historyList.isNotEmpty()) {
+                    binding.includeHistorySheet.rvHistory.visibility = View.VISIBLE
+                    binding.includeHistorySheet.tvEmptyHistory.visibility = View.GONE
                     val path = historyList.map { it.latLng }
 
                     // 畫 Polyline
@@ -303,6 +370,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                         val marker = googleMap.addMarker(
                             MarkerOptions()
                                 .position(cluster.latLng)
+                                .title(cluster.locationName)
                                 .snippet(snippetText)
                                 .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_history_marker))
                         )
@@ -317,6 +385,10 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     googleMap.animateCamera(
                         CameraUpdateFactory.newLatLngBounds(bounds, 100)
                     )
+                }else{
+                    binding.includeHistorySheet.rvHistory.visibility = View.GONE
+                    binding.includeHistorySheet.tvEmptyHistory.text="查無歷史資料"
+                    binding.includeHistorySheet.tvEmptyHistory.visibility = View.VISIBLE
                 }
             }
         }
@@ -472,14 +544,15 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         binding.includeBottomSheet.btnEditGeofence.performClick()
 
         Toast.makeText(requireContext(), "請設定新 Geofence 的位置", Toast.LENGTH_SHORT).show()
-        updateMapPaddingToBottomSheet()
+        updateMapPaddingToMainBottomSheet()
     }
 
-    private fun updateMapPaddingToBottomSheet() {
+    private fun updateMapPaddingToMainBottomSheet() {
         binding.includeBottomSheet.mainBottomSheet.post {
             googleMap.setPadding(0, 0, 0, binding.includeBottomSheet.mainBottomSheet.height)
         }
     }
+
 
     private fun displayGeofenceDetails(geofence: GeofenceData) {
         currentFenceId = geofence.fenceId
@@ -564,7 +637,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
     fun expandSettingsSheet(sharedUser: SharedUser) {
         val meUid = FirebaseAuth.getInstance().currentUser?.uid
-        currentSharedUserUid = sharedUser.uid
+        currentSharedUser = sharedUser
         mainSheet.state = BottomSheetBehavior.STATE_EXPANDED
         binding.includeBottomSheet.textUpdateTime.text = "更新時間未知"
 
@@ -839,7 +912,9 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                         // 歷史點的 layout
                         val view = layoutInflater.inflate(R.layout.custom_map_info_window_history, null)
                         val tvTime = view.findViewById<TextView>(R.id.tvTime)
+                        val tvLocation = view.findViewById<TextView>(R.id.tvLocation)
                         tvTime.text = marker.snippet
+                        tvLocation.text = marker.title
                         view
                     }
                     else -> {

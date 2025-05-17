@@ -103,9 +103,11 @@
             android:id="@+id/tvEmptyHistory"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:text="無歷史資料"
+            android:text="查無歷史資料"
             android:gravity="center"
             android:textAppearance="?attr/textAppearanceBody1"
+            android:textColor="@color/black"
+            android:textSize="20sp"
             android:visibility="gone" />
 
     </FrameLayout>

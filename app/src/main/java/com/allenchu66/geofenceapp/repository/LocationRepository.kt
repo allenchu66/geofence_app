@@ -126,6 +126,7 @@ class LocationRepository {
         day: Int,
         onResult: (List<LocationCluster>) -> Unit
     ) {
+        Log.d("20250517","${month} - ${day}")
         // 1. 計算當天 00:00:00 的時間戳
         val cal = Calendar.getInstance().apply {
             set(Calendar.YEAR, year)
@@ -147,7 +148,7 @@ class LocationRepository {
         }
         val endDate = cal.time
 
-        // 3. 先抓 SharedUser 資訊（如果你需要顯示使用者名稱、頭貼之類的）
+        // 3. 先抓 SharedUser 資訊
         firestore.collection("users")
             .document(userId)
             .get()
@@ -178,9 +179,7 @@ class LocationRepository {
                                 timestamp = ts
                             )
                         }
-                        // 2. 做半徑 30m 聚類
                         val clusters = clusterLocations(rawList, radiusMeters = 60f)
-                        // 3. 回傳 cluster 結果
                         onResult(clusters)
                     }
             }
@@ -193,7 +192,7 @@ class LocationRepository {
         if (list.isEmpty()) return emptyList()
 
         val clusters = mutableListOf<LocationCluster>()
-        // 初始以第一筆當作第一個 cluster 的中心
+        // 以第一筆當作第一個 cluster 的中心
         var curCenterLat = list[0].latLng.latitude
         var curCenterLng = list[0].latLng.longitude
         var startTs = list[0].timestamp ?: return emptyList()
@@ -217,7 +216,7 @@ class LocationRepository {
                 endTs = ts
             } else {
                 // 超出範圍：先把上一個 cluster 存起來
-                clusters.add(LocationCluster(LatLng(curCenterLat, curCenterLng), startTs, endTs))
+                clusters.add(LocationCluster(LatLng(curCenterLat, curCenterLng), startTs, endTs,""))
                 // 重置新 cluster 的中心與時間
                 curCenterLat = loc.latLng.latitude
                 curCenterLng = loc.latLng.longitude
@@ -226,7 +225,9 @@ class LocationRepository {
             }
         }
         // 最後一個 cluster
-        clusters.add(LocationCluster(LatLng(curCenterLat, curCenterLng), startTs, endTs))
+        clusters.add(LocationCluster(LatLng(curCenterLat, curCenterLng), startTs, endTs,""))
         return clusters
     }
+
+
 }
