@@ -126,7 +126,7 @@ class LocationRepository {
         day: Int,
         onResult: (List<LocationCluster>) -> Unit
     ) {
-        Log.d("20250517","${month} - ${day}")
+        Log.d("20250518","${month} - ${day}")
         // 1. 計算當天 00:00:00 的時間戳
         val cal = Calendar.getInstance().apply {
             set(Calendar.YEAR, year)
@@ -181,7 +181,7 @@ class LocationRepository {
                         }
                         val clusters = clusterLocations(rawList, radiusMeters = 60f)
                         onResult(clusters)
-                    }
+                    }.addOnFailureListener { e -> Log.e("20250518", "Error", e) }
             }
     }
 

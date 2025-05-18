@@ -31,6 +31,7 @@ import com.allenchu66.geofenceapp.R
 import com.allenchu66.geofenceapp.adapter.HistoryAdapter
 import com.allenchu66.geofenceapp.databinding.FragmentMapBinding
 import com.allenchu66.geofenceapp.model.GeofenceData
+import com.allenchu66.geofenceapp.model.LocationCluster
 import com.allenchu66.geofenceapp.model.SharedUser
 import com.allenchu66.geofenceapp.repository.LocationRepository
 import com.allenchu66.geofenceapp.repository.SharedUserRepository
@@ -193,8 +194,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
                 if ((newState == STATE_HIDDEN || newState == STATE_COLLAPSED)
                     && historySheet.state != STATE_EXPANDED) {
-                    Log.d("20250518","set current user null in main sheet callback")
-                    currentSharedUser = null
+                    handler.postDelayed(clearUserRunnable, 300)
                 }
             }
 
@@ -207,12 +207,12 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         }
 
         binding.includeBottomSheet.btnShowHistory.setOnClickListener {
+            Log.d("20250518","btnShowHistory click")
             historySheet.state = STATE_EXPANDED
 
             mainSheet.state = STATE_HIDDEN
 
-            binding.includeHistorySheet.tvHistoryTitle.text =
-                currentSharedUser?.displayName + "的定位紀錄"
+            binding.includeHistorySheet.tvHistoryTitle.text = currentSharedUser?.displayName + "的定位紀錄"
             selectedDate = LocalDate.now()
             updateHistoryForDate()
         }
@@ -334,6 +334,13 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
     }
 
+    private val clearUserRunnable = Runnable {
+        if (mainSheet.state != STATE_EXPANDED && historySheet.state != STATE_EXPANDED) {
+            Log.d("20250518", "Delayed clear currentSharedUser")
+            currentSharedUser = null
+        }
+    }
+
     private fun restoreSaveButtonUI() {
         binding.includeBottomSheet.apply {
             btnSave.isEnabled = true
@@ -363,6 +370,11 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                         val cameraUpdate = CameraUpdateFactory.newLatLngZoom(marker.position, 17f)
                         googleMap.animateCamera(cameraUpdate)
                     }
+
+                    pendingHistoryList?.let {
+                        renderHistoryUI(it)
+                        pendingHistoryList = null
+                    }
                 }else if (newState == STATE_HIDDEN || newState == STATE_COLLAPSED) {
                     historyPolyline?.remove()
                     historyPolyline = null
@@ -372,8 +384,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 }
                 if ((newState == STATE_HIDDEN || newState == STATE_COLLAPSED)
                     && mainSheet.state != STATE_EXPANDED) {
-                    Log.d("20250518","set current user null in hisotry sheet callback")
-                    currentSharedUser = null
+                    handler.postDelayed(clearUserRunnable, 300)
                 }
             }
 
@@ -462,6 +473,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         return timeFormatter.format(ts.toDate())
     }
 
+    private var pendingHistoryList: List<LocationCluster>? = null
     private fun initMapViewModel() {
         // 初始化 ViewModel
         val repository = LocationRepository()
@@ -497,59 +509,69 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         }
 
         mapViewModel.historyWithAddress.observe(viewLifecycleOwner) { historyList ->
-            Log.d("20250517", historyList.size.toString())
+            Log.d("20250518", "historyList size:"+historyList.size.toString())
             // 只有當歷史 Sheet 展開時，才畫軌跡
-            if (historySheet.state == BottomSheetBehavior.STATE_EXPANDED) {
-                historyAdapter.updateList(historyList)
-                // 移除舊的
-                historyPolyline?.remove()
-                historyMarkers.forEach { it.remove() }
-                historyMarkers.clear()
-
-                if (historyList.isNotEmpty()) {
-                    binding.includeHistorySheet.rvHistory.visibility = View.VISIBLE
-                    binding.includeHistorySheet.tvEmptyHistory.visibility = View.GONE
-                    val path = historyList.map { it.latLng }
-
-                    // 畫 Polyline
-                    historyPolyline = googleMap.addPolyline(
-                        PolylineOptions()
-                            .addAll(path)
-                            .width(5f)
-                            .color(Color.BLUE)
-                            .geodesic(true)
-                    )
-
-                    historyList.forEach { cluster ->
-                        val start = formatHourMinute(cluster.startTs)
-                        val end = formatHourMinute(cluster.endTs)
-                        val snippetText = "$start ~ $end"
-                        val marker = googleMap.addMarker(
-                            MarkerOptions()
-                                .position(cluster.latLng)
-                                .title(cluster.locationName)
-                                .snippet(snippetText)
-                                .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_history_marker))
-                        )
-                        marker?.apply { tag = "history" }
-                        marker?.let { historyMarkers.add(it) }
-                    }
-
-                    // 把鏡頭框進所有軌跡
-                    val bounds = LatLngBounds.builder().also { b ->
-                        path.forEach { b.include(it) }
-                    }.build()
-                    googleMap.animateCamera(
-                        CameraUpdateFactory.newLatLngBounds(bounds, 100)
-                    )
-                } else {
-                    binding.includeHistorySheet.rvHistory.visibility = View.GONE
-                    binding.includeHistorySheet.tvEmptyHistory.text = "查無歷史資料"
-                    binding.includeHistorySheet.tvEmptyHistory.visibility = View.VISIBLE
-                }
+            if (historySheet.state == STATE_EXPANDED) {
+                Log.d("20250518", "test1")
+                renderHistoryUI(historyList)
+            }else{
+                Log.d("20250518", "test2")
+                pendingHistoryList = historyList
             }
         }
     }
+
+
+    private fun renderHistoryUI(historyList: List<LocationCluster>) {
+        historyAdapter.updateList(historyList)
+        // 移除舊的
+        historyPolyline?.remove()
+        historyMarkers.forEach { it.remove() }
+        historyMarkers.clear()
+
+        if (historyList.isNotEmpty()) {
+            binding.includeHistorySheet.rvHistory.visibility = View.VISIBLE
+            binding.includeHistorySheet.tvEmptyHistory.visibility = View.GONE
+            val path = historyList.map { it.latLng }
+
+            // 畫 Polyline
+            historyPolyline = googleMap.addPolyline(
+                PolylineOptions()
+                    .addAll(path)
+                    .width(5f)
+                    .color(Color.BLUE)
+                    .geodesic(true)
+            )
+
+            historyList.forEach { cluster ->
+                val start = formatHourMinute(cluster.startTs)
+                val end = formatHourMinute(cluster.endTs)
+                val snippetText = "$start ~ $end"
+                val marker = googleMap.addMarker(
+                    MarkerOptions()
+                        .position(cluster.latLng)
+                        .title(cluster.locationName)
+                        .snippet(snippetText)
+                        .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_history_marker))
+                )
+                marker?.apply { tag = "history" }
+                marker?.let { historyMarkers.add(it) }
+            }
+
+            // 把鏡頭框進所有軌跡
+            val bounds = LatLngBounds.builder().also { b ->
+                path.forEach { b.include(it) }
+            }.build()
+            googleMap.animateCamera(
+                CameraUpdateFactory.newLatLngBounds(bounds, 100)
+            )
+        } else {
+            binding.includeHistorySheet.rvHistory.visibility = View.GONE
+            binding.includeHistorySheet.tvEmptyHistory.text = "查無歷史資料"
+            binding.includeHistorySheet.tvEmptyHistory.visibility = View.VISIBLE
+        }
+    }
+
 
     private fun initGeofenceViewMode() {
         val geofenceViewModelFactory =

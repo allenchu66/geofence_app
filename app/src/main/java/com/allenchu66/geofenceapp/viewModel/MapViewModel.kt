@@ -48,6 +48,7 @@ class MapViewModel(application: Application, private val repo: LocationRepositor
      */
     fun loadHistoryLocations(targetUid: String, year: Int, month: Int, day: Int) {
         repo.getHistoryLocationsForDate(targetUid, year, month, day) { list ->
+            Log.d("20250518","rawList size:"+list.size.toString())
             _historyLocations.postValue(list)
             fetchAddressesForClusters(list)
         }
@@ -71,6 +72,8 @@ class MapViewModel(application: Application, private val repo: LocationRepositor
                 }
                 cluster.copy(locationName = address)
             }
+
+            Log.d("20250518","fetchAddressesForClusters size:"+updated.size)
             _historyWithAddress.postValue(updated)
         }
     }
