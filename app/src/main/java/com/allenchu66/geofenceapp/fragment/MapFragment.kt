@@ -7,22 +7,15 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
-import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.format.DateUtils
-import android.transition.Transition
 import android.util.Log
-import android.util.StateSet
-import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -36,7 +29,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.allenchu66.geofenceapp.R
 import com.allenchu66.geofenceapp.adapter.HistoryAdapter
-
 import com.allenchu66.geofenceapp.databinding.FragmentMapBinding
 import com.allenchu66.geofenceapp.model.GeofenceData
 import com.allenchu66.geofenceapp.model.SharedUser
@@ -55,8 +47,19 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
-import com.google.android.gms.maps.model.*
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.Circle
+import com.google.android.gms.maps.model.CircleOptions
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
+import com.google.android.gms.maps.model.Marker
+import com.google.android.gms.maps.model.MarkerOptions
+import com.google.android.gms.maps.model.Polyline
+import com.google.android.gms.maps.model.PolylineOptions
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_COLLAPSED
+import com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+import com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_HIDDEN
 import com.google.android.material.chip.Chip
 import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
@@ -128,7 +131,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             // 只有 sheet 展開時才重整 UI
             if (mainSheet.state == BottomSheetBehavior.STATE_EXPANDED) {
                 currentSharedUser
-                    ?.let { sharedUser -> users.find { it.uid == sharedUser.uid} }
+                    ?.let { sharedUser -> users.find { it.uid == sharedUser.uid } }
                     ?.let { updatedUser ->
                         // 重新渲染 bottom sheet
                         expandSettingsSheet(updatedUser)
@@ -158,93 +161,196 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     private val historyMarkers = mutableListOf<Marker>()
     private var selectedDate: LocalDate = LocalDate.now()
 
-    @SuppressLint("SetTextI18n")
-    private fun setUpBottomSheet() {
+    private fun initMainBottomSheet() {
         mainSheet = BottomSheetBehavior.from(binding.includeBottomSheet.mainBottomSheet)
         mainSheet.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
             override fun onStateChanged(bottomSheet: View, newState: Int) {
-                val bottomPadding = if (newState == BottomSheetBehavior.STATE_EXPANDED) {
-                    bottomSheet.height
-                } else {
-                    0
-                }
-                googleMap.setPadding(0, 0, 0, bottomPadding)
-                if (newState == BottomSheetBehavior.STATE_HIDDEN) {
+                Log.d("20250518","mainSheet:"+newState)
+                updateSheetState()
+                if (newState == STATE_HIDDEN || newState == STATE_COLLAPSED) {
                     // 清除地理圍欄標記與圓圈
                     geofenceMarker?.remove()
                     geofenceMarker = null
                     geofenceCircle?.remove()
                     geofenceCircle = null
-                    // 如果你有存 savedGeofenceData，也可以一併清除
+
                     savedGeofenceData = null
                     currentFenceId = null
+                }
 
-                    if(historySheet.state == BottomSheetBehavior.STATE_HIDDEN) {
-                        currentSharedUser = null
+                if ((newState == STATE_HIDDEN || newState == STATE_COLLAPSED)
+                    && historySheet.state != STATE_EXPANDED) {
+                    Log.d("20250518","set current user null in main sheet callback")
+                    currentSharedUser = null
+                }
+            }
+
+            override fun onSlide(bottomSheet: View, slideOffset: Float) = Unit
+        })
+        mainSheet.state = STATE_HIDDEN
+
+        binding.includeBottomSheet.btnCloseSheet.setOnClickListener {
+            mainSheet.state = STATE_HIDDEN
+        }
+
+        binding.includeBottomSheet.btnShowHistory.setOnClickListener {
+            historySheet.state = STATE_EXPANDED
+
+            mainSheet.state = STATE_HIDDEN
+
+            binding.includeHistorySheet.tvHistoryTitle.text =
+                currentSharedUser?.displayName + "的定位紀錄"
+            selectedDate = LocalDate.now()
+            updateHistoryForDate()
+        }
+
+        binding.includeBottomSheet.mainBottomSheet.addOnLayoutChangeListener{ v, _, _, _, bottom, _, _, _, oldBottom ->
+            updateSheetState()
+        }
+
+        binding.includeBottomSheet.apply {
+            btnSave.setOnClickListener {
+                val nameInput =
+                    etGeofenceLocationName.text.toString().takeIf { it.isNotBlank() } ?: "default"
+                val center = geofenceMarker?.position
+                val radius = geofenceCircle?.radius?.toFloat() ?: DEFAULT_RADIUS
+                val transitions = mutableListOf<String>().apply {
+                    if (chipEnter.isChecked) add("enter")
+                    if (chipExit.isChecked) add("exit")
+                }
+                if (center == null) {
+                    Toast.makeText(requireContext(), "請先在地圖上選擇一個範圍", Toast.LENGTH_SHORT)
+                        .show()
+                    return@setOnClickListener
+                }
+
+                if (transitions.isEmpty()) {
+                    Toast.makeText(
+                        requireContext(),
+                        "請至少選擇 進入 或 離開 觸發事件",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@setOnClickListener
+                }
+
+                currentSharedUser?.uid?.let { it1 ->
+                    geofenceViewModel.uploadGeofence(
+                        fenceId = savedGeofenceData?.fenceId,
+                        ownerUid = it1,
+                        latitude = center.latitude,
+                        longitude = center.longitude,
+                        radius = radius,
+                        locationName = nameInput,
+                        transition = transitions,
+                        onSuccess = { returnedFenceId ->
+                            currentFenceId = returnedFenceId
+                            Toast.makeText(requireContext(), "地理圍欄儲存成功", Toast.LENGTH_SHORT)
+                                .show()
+                            currentSharedUser?.let { it1 ->
+                                geofenceViewModel.loadGeofencesSetByMe(
+                                    it1.uid
+                                )
+                            }
+                        },
+                        onFailure = { msg ->
+                            Toast.makeText(
+                                requireContext(),
+                                "地理圍欄儲存失敗: $msg",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    )
+                }
+            }
+
+            btnEditGeofence.setOnClickListener {
+                val marker = markerMap[currentSharedUser?.uid]
+                val center = savedGeofenceData
+                    ?.let { LatLng(it.latitude, it.longitude) }
+                    ?: marker?.position
+                val radius = savedGeofenceData?.radius ?: DEFAULT_RADIUS
+                if (center != null) {
+                    addOrResetGeofence(center, radius)
+                    tvLatLng.text =
+                        "Lat: %.5f, Lng: %.5f".format(center.latitude, center.longitude)
+                }
+            }
+
+            sliderRadius.addOnChangeListener { _, value, _ ->
+                updateCircleRadius(value.toDouble())
+            }
+
+            btnToggleShare.setOnClickListener {
+                currentSharedUser?.let { user ->
+                    when (user.status) {
+                        "pending" -> {
+                            if (user.inviter == FirebaseAuth.getInstance().currentUser?.uid) {
+                                sharedUserVM.updateShareRequestStatus(user.email, "declined")
+                            } else {
+                                sharedUserVM.updateShareRequestStatus(user.email, "accepted")
+                            }
+                        }
+
+                        "accepted" -> {
+                            sharedUserVM.updateShareRequestStatus(user.email, "declined")
+                        }
+
+                        "declined" -> {
+                            sharedUserVM.sendShareRequest(user.email)
+                        }
+
+                        else -> {
+                            sharedUserVM.sendShareRequest(user.email)
+                        }
+
                     }
                 }
             }
 
-            override fun onSlide(bottomSheet: View, slideOffset: Float) {
-                // 也可以在滑動時跟著 slotOffset 動態更新
-                adjustMapPadding(bottomSheet, slideOffset)
+            btnDecline.setOnClickListener {
+                currentSharedUser?.let { user ->
+                    sharedUserVM.updateShareRequestStatus(user.email, "declined")
+                }
             }
-        })
-        mainSheet.state = BottomSheetBehavior.STATE_HIDDEN
-
-        binding.includeBottomSheet.btnCloseSheet.setOnClickListener {
-            mainSheet.state = BottomSheetBehavior.STATE_HIDDEN
         }
 
+    }
+
+    private fun initHistoryBottomSheet() {
         historySheet = BottomSheetBehavior.from(binding.includeHistorySheet.historyBottomSheet)
-        historySheet.state = BottomSheetBehavior.STATE_HIDDEN
+        historySheet.state = STATE_HIDDEN
         historySheet.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
             override fun onStateChanged(bottomSheet: View, newState: Int) {
-                if (newState == BottomSheetBehavior.STATE_EXPANDED) {
-                    binding.includeHistorySheet.historyBottomSheet.post {
-                        googleMap.setPadding(
-                            0,
-                            0,
-                            0,
-                            binding.includeHistorySheet.historyBottomSheet.height
-                        )
-                    }
-                }else if (newState == BottomSheetBehavior.STATE_HIDDEN) {
+                Log.d("20250518","historySheet:"+newState)
+                updateSheetState()
+                if (newState == STATE_HIDDEN || newState == STATE_COLLAPSED) {
                     historyPolyline?.remove()
                     historyPolyline = null
 
                     historyMarkers.forEach { it.remove() }
                     historyMarkers.clear()
-
-                    googleMap.setPadding(0, 0, 0, 0)
+                }
+                if ((newState == STATE_HIDDEN || newState == STATE_COLLAPSED)
+                    && mainSheet.state != STATE_EXPANDED) {
+                    Log.d("20250518","set current user null in hisotry sheet callback")
+                    currentSharedUser = null
                 }
             }
 
             override fun onSlide(bottomSheet: View, slideOffset: Float) = Unit
         })
 
-        binding.includeBottomSheet.btnShowHistory.setOnClickListener {
-            // 隱藏第一個
-            mainSheet.state = BottomSheetBehavior.STATE_HIDDEN
-            // 展開第二個
-            historySheet.state = BottomSheetBehavior.STATE_EXPANDED
-
-            binding.includeHistorySheet.tvHistoryTitle.text = currentSharedUser?.displayName+"的定位紀錄"
-            selectedDate = LocalDate.now()
-            updateHistoryForDate()
-        }
-
         binding.includeHistorySheet.btnBackHistory.setOnClickListener {
-            historySheet.state = BottomSheetBehavior.STATE_HIDDEN
-            mainSheet.state = BottomSheetBehavior.STATE_EXPANDED
+            historySheet.state = STATE_HIDDEN
+            mainSheet.state = STATE_EXPANDED
         }
 
-        binding.includeHistorySheet.btnPrevDay.setOnClickListener{
+        binding.includeHistorySheet.btnPrevDay.setOnClickListener {
             selectedDate = selectedDate.minusDays(1)
             updateHistoryForDate()
         }
 
-        binding.includeHistorySheet.btnNextDay.setOnClickListener{
+        binding.includeHistorySheet.btnNextDay.setOnClickListener {
             selectedDate = selectedDate.plusDays(1)
             updateHistoryForDate()
         }
@@ -265,6 +371,16 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             layoutManager = LinearLayoutManager(context, RecyclerView.VERTICAL, false)
             this.adapter = historyAdapter
         }
+
+        binding.includeHistorySheet.historyBottomSheet.addOnLayoutChangeListener{ v, _, _, _, bottom, _, _, _, oldBottom ->
+            updateSheetState()
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun setUpBottomSheet() {
+        initMainBottomSheet()
+        initHistoryBottomSheet()
     }
 
     private fun updateHistoryForDate() {
@@ -275,7 +391,8 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         binding.includeHistorySheet.btnNextDay.visibility =
             if (selectedDate.isEqual(today)) View.INVISIBLE else View.VISIBLE
 
-        binding.includeHistorySheet.tvHistoryDate.text = selectedDate.format(DateTimeFormatter.ofPattern("MM-dd"))
+        binding.includeHistorySheet.tvHistoryDate.text =
+            selectedDate.format(DateTimeFormatter.ofPattern("MM-dd"))
         currentSharedUser?.let { sharedUser ->
             mapViewModel.loadHistoryLocations(
                 targetUid = sharedUser.uid,
@@ -308,7 +425,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     private fun initMapViewModel() {
         // 初始化 ViewModel
         val repository = LocationRepository()
-        val factory = MapViewModelFactory(requireActivity().application,repository)
+        val factory = MapViewModelFactory(requireActivity().application, repository)
         mapViewModel = ViewModelProvider(this, factory)[MapViewModel::class.java]
 
         // 觀察共享好友位置資料
@@ -365,7 +482,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
                     historyList.forEach { cluster ->
                         val start = formatHourMinute(cluster.startTs)
-                        val end   = formatHourMinute(cluster.endTs)
+                        val end = formatHourMinute(cluster.endTs)
                         val snippetText = "$start ~ $end"
                         val marker = googleMap.addMarker(
                             MarkerOptions()
@@ -385,9 +502,9 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     googleMap.animateCamera(
                         CameraUpdateFactory.newLatLngBounds(bounds, 100)
                     )
-                }else{
+                } else {
                     binding.includeHistorySheet.rvHistory.visibility = View.GONE
-                    binding.includeHistorySheet.tvEmptyHistory.text="查無歷史資料"
+                    binding.includeHistorySheet.tvEmptyHistory.text = "查無歷史資料"
                     binding.includeHistorySheet.tvEmptyHistory.visibility = View.VISIBLE
                 }
             }
@@ -521,7 +638,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         binding.includeBottomSheet.btnShowHistory.visibility = View.GONE
         binding.includeBottomSheet.layoutGeofenceConfig.visibility = View.VISIBLE
         loadGeofenceChips(geofences)
-        // 重置這個旗標，留給下次判斷用
+        // 重置這個Flag，留給下次判斷用
         isConfigVisible = false
     }
 
@@ -544,15 +661,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         binding.includeBottomSheet.btnEditGeofence.performClick()
 
         Toast.makeText(requireContext(), "請設定新 Geofence 的位置", Toast.LENGTH_SHORT).show()
-        updateMapPaddingToMainBottomSheet()
     }
-
-    private fun updateMapPaddingToMainBottomSheet() {
-        binding.includeBottomSheet.mainBottomSheet.post {
-            googleMap.setPadding(0, 0, 0, binding.includeBottomSheet.mainBottomSheet.height)
-        }
-    }
-
 
     private fun displayGeofenceDetails(geofence: GeofenceData) {
         currentFenceId = geofence.fenceId
@@ -569,14 +678,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         binding.includeBottomSheet.chipExit.isChecked = geofence.transition.contains("exit")
 
         addOrResetGeofence(LatLng(geofence.latitude, geofence.longitude), geofence.radius)
-    }
-
-    private fun adjustMapPadding(
-        sheet: View,
-        slideOffset: Float = 1f // collapse 時 slideOffset=0, expand 時=1
-    ) {
-        val bottomPadding = (sheet.height * slideOffset).toInt()
-        googleMap.setPadding(0, 0, 0, bottomPadding)
     }
 
     private fun convertRelativeUpdateTime(timestamp: Timestamp?): String {
@@ -638,7 +739,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     fun expandSettingsSheet(sharedUser: SharedUser) {
         val meUid = FirebaseAuth.getInstance().currentUser?.uid
         currentSharedUser = sharedUser
-        mainSheet.state = BottomSheetBehavior.STATE_EXPANDED
+        mainSheet.state = STATE_EXPANDED
         binding.includeBottomSheet.textUpdateTime.text = "更新時間未知"
 
         if (sharedUser.status == "accepted") {
@@ -692,21 +793,12 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     if (sharedUser.inviter == meUid) {
                         // 我是邀請者 → 「取消邀請」
                         btnToggleShare.text = "取消邀請"
-                        btnToggleShare.setOnClickListener {
-                            sharedUserVM.updateShareRequestStatus(sharedUser.email, "declined")
-                        }
                     } else {
                         // 對方邀請我 → 顯示「接受」＋「拒絕」
                         btnToggleShare.text = "接受邀請"
-                        btnToggleShare.setOnClickListener {
-                            sharedUserVM.updateShareRequestStatus(sharedUser.email, "accepted")
-                        }
                         btnDecline.apply {
                             visibility = View.VISIBLE
                             text = "拒絕邀請"
-                            setOnClickListener {
-                                sharedUserVM.updateShareRequestStatus(sharedUser.email, "declined")
-                            }
                         }
                     }
                 }
@@ -715,92 +807,18 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 "accepted" -> {
                     // 正在共享 → 顯示一個開關或「停止共享」按鈕
                     btnToggleShare.text = "停止共享"
-                    btnToggleShare.setOnClickListener {
-                        sharedUserVM.updateShareRequestStatus(sharedUser.email, "declined")
-                    }
                 }
 
                 // 3. 已 declined
                 "declined" -> {
                     // 已拒絕 → 「重新邀請」
                     btnToggleShare.text = "重新邀請"
-                    btnToggleShare.setOnClickListener {
-                        sharedUserVM.sendShareRequest(sharedUser.email)
-                    }
                 }
 
                 else -> {
                     // 其他 fallback
                     btnToggleShare.text = "邀請共享"
-                    btnToggleShare.setOnClickListener {
-                        sharedUserVM.sendShareRequest(sharedUser.email)
-                    }
                 }
-            }
-
-            btnSave.setOnClickListener {
-                val nameInput =
-                    etGeofenceLocationName.text.toString().takeIf { it.isNotBlank() } ?: "default"
-                val center = geofenceMarker?.position
-                val radius = geofenceCircle?.radius?.toFloat() ?: DEFAULT_RADIUS
-                val transitions = mutableListOf<String>().apply {
-                    if (chipEnter.isChecked) add("enter")
-                    if (chipExit.isChecked) add("exit")
-                }
-                if (center == null) {
-                    Toast.makeText(requireContext(), "請先在地圖上選擇一個範圍", Toast.LENGTH_SHORT)
-                        .show()
-                    return@setOnClickListener
-                }
-
-                if (transitions.isEmpty()) {
-                    Toast.makeText(
-                        requireContext(),
-                        "請至少選擇 進入 或 離開 觸發事件",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    return@setOnClickListener
-                }
-
-                geofenceViewModel.uploadGeofence(
-                    fenceId = savedGeofenceData?.fenceId,
-                    ownerUid = sharedUser.uid,
-                    latitude = center.latitude,
-                    longitude = center.longitude,
-                    radius = radius,
-                    locationName = nameInput,
-                    transition = transitions,
-                    onSuccess = { returnedFenceId ->
-                        currentFenceId = returnedFenceId
-                        Toast.makeText(requireContext(), "地理圍欄儲存成功", Toast.LENGTH_SHORT)
-                            .show()
-                        geofenceViewModel.loadGeofencesSetByMe(sharedUser.uid)
-                    },
-                    onFailure = { msg ->
-                        Toast.makeText(
-                            requireContext(),
-                            "地理圍欄儲存失敗: $msg",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                )
-            }
-
-            btnEditGeofence.setOnClickListener {
-                val marker = markerMap[sharedUser.uid]
-                val center = savedGeofenceData
-                    ?.let { LatLng(it.latitude, it.longitude) }
-                    ?: marker?.position
-                val radius = savedGeofenceData?.radius ?: DEFAULT_RADIUS
-                if (center != null) {
-                    addOrResetGeofence(center, radius)
-                    tvLatLng.text =
-                        "Lat: %.5f, Lng: %.5f".format(center.latitude, center.longitude)
-                }
-            }
-
-            sliderRadius.addOnChangeListener { _, value, _ ->
-                updateCircleRadius(value.toDouble())
             }
         }
     }
@@ -888,7 +906,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             override fun getInfoWindow(marker: Marker): View? = null
 
             override fun getInfoContents(marker: Marker): View {
-                return when(marker.tag){
+                return when (marker.tag) {
                     "shared" -> {
                         val view = layoutInflater.inflate(R.layout.custom_map_info_window, null)
                         val ivAvatar = view.findViewById<ImageView>(R.id.ivAvatar)
@@ -908,15 +926,18 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                         }
                         view
                     }
+
                     "history" -> {
                         // 歷史點的 layout
-                        val view = layoutInflater.inflate(R.layout.custom_map_info_window_history, null)
+                        val view =
+                            layoutInflater.inflate(R.layout.custom_map_info_window_history, null)
                         val tvTime = view.findViewById<TextView>(R.id.tvTime)
                         val tvLocation = view.findViewById<TextView>(R.id.tvLocation)
                         tvTime.text = marker.snippet
                         tvLocation.text = marker.title
                         view
                     }
+
                     else -> {
                         // fallback
                         val view = layoutInflater.inflate(
@@ -1090,5 +1111,29 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         super.onDestroyView()
         handler.removeCallbacks(locationUpdateRunnable)
         _binding = null
+    }
+
+    enum class SheetState { NONE, MAIN, HISTORY }
+
+    private var sheetState = SheetState.NONE
+
+    private fun updateSheetState() {
+        when {
+            mainSheet.state == STATE_EXPANDED -> sheetState = SheetState.MAIN
+            historySheet.state == STATE_EXPANDED -> sheetState = SheetState.HISTORY
+            else -> sheetState = SheetState.NONE
+        }
+
+        Log.d("20250518","sheet state:"+sheetState.toString())
+
+        // 根據 state 決定底部 padding
+        val bottomPadding = when (sheetState) {
+            SheetState.MAIN -> binding.includeBottomSheet.mainBottomSheet.height
+            SheetState.HISTORY -> binding.includeHistorySheet.historyBottomSheet.height
+            SheetState.NONE -> 0
+        }
+        if (::googleMap.isInitialized) {
+            googleMap.setPadding(0, 0, 0, bottomPadding)
+        }
     }
 }

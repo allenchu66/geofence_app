@@ -9,6 +9,7 @@
     android:padding="16dp"
     app:behavior_hideable="true"
     app:behavior_peekHeight="0dp"
+    app:behavior_skipCollapsed="true"
     app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
 
     <!-- User Header -->
