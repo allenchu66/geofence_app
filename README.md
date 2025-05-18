@@ -4,15 +4,35 @@ GeofenceApp 是一款基於 Firebase 架構的 Android 應用，支援即時位�
 
 ---
 
-## 📱 App 預覽
+##  App 預覽
 
-| 註冊頁面                        | 主畫面                        | 側邊選單                        |
-|-----------------------------|----------------------------|-----------------------------|
-| ![](screenshots/register.png) | ![](screenshots/action.png) | ![](screenshots/drawer.png) |
+<table width="100%">
+  <tr>
+    <td width="33%" align="center">
+      <img src="screenshots/register.png" width="100%"/><br/>註冊頁面
+    </td>
+    <td width="33%" align="center">
+      <img src="screenshots/action.png" width="100%"/><br/>主畫面
+    </td>
+    <td width="33%" align="center">
+      <img src="screenshots/drawer.png" width="100%"/><br/>側邊選單
+    </td>
+  </tr>
+</table>
 
-| 地理圍欄(Geofence)設定                 | 歷史定位紀錄                       | 帳號設定頁面                               |
-|----------------------------------|------------------------------|--------------------------------------|
-| ![](screenshots/geofence_setting.png) | ![](screenshots/history.png) | ![](screenshots/account_setting.png) |
+<table width="100%">
+  <tr>
+    <td width="33%" align="center">
+      <img src="screenshots/geofence_setting.png" width="100%"/><br/>地理圍欄設定
+    </td>
+    <td width="33%" align="center">
+      <img src="screenshots/history.png" width="100%"/><br/>歷史定位紀錄
+    </td>
+    <td width="33%" align="center">
+      <img src="screenshots/account_setting.png" width="100%"/><br/>帳號設定頁面
+    </td>
+  </tr>
+</table>
 
 ## 功能介紹
 
