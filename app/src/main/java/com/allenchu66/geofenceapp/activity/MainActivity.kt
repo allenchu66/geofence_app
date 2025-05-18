@@ -324,19 +324,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun showAddSharedUserDialog() {
         val input = EditText(this).apply {
-            hint = "Enter friend's email"
+            hint = "請輸入好友的email"
             inputType = InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Add Shared User")
+            .setTitle("邀請好友")
             .setView(input)
-            .setPositiveButton("Send") { _, _ ->
+            .setPositiveButton("傳送邀請") { _, _ ->
                 val email = input.text.toString().trim()
                 if (email.isNotEmpty()) {
                     viewModel.sendShareRequest(email)
                 } else {
-                    Toast.makeText(this, "Email cannot be empty", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "請輸入Email", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancel", null)

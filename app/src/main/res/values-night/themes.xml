@@ -21,5 +21,7 @@
         <!-- 錯誤色 -->
         <item name="colorError">@color/colorError</item>
         <item name="colorOnError">@color/colorOnError</item>
+
+        <item name="android:statusBarColor">@color/white</item>
     </style>
 </resources>

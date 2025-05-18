@@ -15,6 +15,7 @@ import com.allenchu66.geofenceapp.repository.GeofenceRepository
 import com.allenchu66.geofenceapp.repository.LocationRepository
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.firestore
 
 class GeofenceViewModel(
@@ -38,6 +39,8 @@ class GeofenceViewModel(
     private val _incomingGeofences = MutableLiveData<List<GeofenceData>>()
     val incomingGeofences: LiveData<List<GeofenceData>> = _incomingGeofences
 
+    private var incomingGeofenceListener: ListenerRegistration? = null
+
     fun loadGeofencesSetByMe(targetUid: String) {
         manager.loadGeofencesSetByMe(
             targetUid = targetUid,
@@ -51,12 +54,20 @@ class GeofenceViewModel(
         )
     }
 
-    // 讀取並註冊所有針對 currentUser 的 Geofence
-    fun loadIncomingGeofences() {
-        manager.reloadAllGeofences { list ->
-            _incomingGeofences.postValue(list)
-            Log.d(TAG, "Incoming geofences loaded: ${list.size}")
-        }
+    fun observeIncomingGeofencesRealtime() {
+        incomingGeofenceListener?.remove()
+
+        incomingGeofenceListener = manager.observeIncomingGeofences(
+            onUpdate = { list ->
+                Log.d(TAG, "Realtime incoming geofences updated: ${list.size}")
+                manager.removeAllLocalGeofences()
+                list.forEach { manager.addGeofenceToLocal(it) }
+                _incomingGeofences.postValue(list)
+            },
+            onError = { e ->
+                Log.e(TAG, "Realtime geofence error", e)
+            }
+        )
     }
 
     //OwnerUid => 要觸發Geofence的Uid
@@ -97,4 +108,10 @@ class GeofenceViewModel(
             onFailure = onFailure
         )
     }
+
+    override fun onCleared() {
+        incomingGeofenceListener?.remove()
+        super.onCleared()
+    }
+
 }

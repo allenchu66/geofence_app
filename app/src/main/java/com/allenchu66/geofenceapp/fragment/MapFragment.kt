@@ -129,7 +129,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         sharedUserVM.loadSharedUsers()
         sharedUserVM.sharedUsers.observe(viewLifecycleOwner) { users ->
             // 只有 sheet 展開時才重整 UI
-            if (mainSheet.state == BottomSheetBehavior.STATE_EXPANDED) {
+            if (mainSheet.state == STATE_EXPANDED) {
                 currentSharedUser
                     ?.let { sharedUser -> users.find { it.uid == sharedUser.uid } }
                     ?.let { updatedUser ->
@@ -153,7 +153,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         // 地圖就緒後載入共享好友位置
         FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
             mapViewModel.loadSharedLocations(uid)
-            geofenceViewModel.loadIncomingGeofences()
+            geofenceViewModel.observeIncomingGeofencesRealtime()
         }
     }
 
@@ -247,6 +247,9 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                 }
 
                 currentSharedUser?.uid?.let { it1 ->
+                    btnSave.isEnabled = false
+                    btnSave.text = "儲存中..."
+                    btnSave.alpha = 0.8f
                     geofenceViewModel.uploadGeofence(
                         fenceId = savedGeofenceData?.fenceId,
                         ownerUid = it1,
@@ -264,6 +267,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                                     it1.uid
                                 )
                             }
+                            restoreSaveButtonUI()
                         },
                         onFailure = { msg ->
                             Toast.makeText(
@@ -271,6 +275,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                                 "地理圍欄儲存失敗: $msg",
                                 Toast.LENGTH_SHORT
                             ).show()
+                            restoreSaveButtonUI()
                         }
                     )
                 }
@@ -325,6 +330,15 @@ class MapFragment : Fragment(), OnMapReadyCallback {
                     sharedUserVM.updateShareRequestStatus(user.email, "declined")
                 }
             }
+        }
+
+    }
+
+    private fun restoreSaveButtonUI() {
+        binding.includeBottomSheet.apply {
+            btnSave.isEnabled = true
+            btnSave.text = "儲存地理圍欄"
+            btnSave.alpha = 1f
         }
 
     }
@@ -635,7 +649,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             binding.includeBottomSheet.layoutGeofenceConfig.visibility = View.GONE
             binding.includeBottomSheet.btnSetGeofence.apply {
                 visibility = View.VISIBLE
-                text = "設定 Geofence"
+                text = "設定地理圍欄"
                 setOnClickListener {
                     isConfigVisible = true
                     createNewGeofence()
@@ -650,7 +664,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             binding.includeBottomSheet.btnShowHistory.visibility = View.VISIBLE
             binding.includeBottomSheet.btnSetGeofence.apply {
                 visibility = View.VISIBLE
-                text = "設定 Geofence"
+                text = "設定地理圍欄"
                 setOnClickListener {
                     isConfigVisible = true
                     setGeofenceSettingUI(geofences)  // 再次進入這個方法就會走下面那支
@@ -923,6 +937,35 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         }
 
         googleMap.setOnMarkerDragListener(geofenceDragListener)
+
+        googleMap.setOnMapClickListener { latLng ->
+            // 如果 marker 已存在，就移動
+            if (geofenceMarker != null) {
+                geofenceMarker?.position = latLng
+                geofenceCircle?.center = latLng
+            } else {
+                // 第一次點擊時建立 marker 和 circle
+                geofenceMarker = googleMap.addMarker(
+                    MarkerOptions()
+                        .position(latLng)
+                        .title("地理圍欄中心")
+                        .draggable(true)
+                )
+                geofenceCircle = googleMap.addCircle(
+                    CircleOptions()
+                        .center(latLng)
+                        .radius(DEFAULT_RADIUS.toDouble())
+                        .strokeColor(Color.BLUE)
+                        .fillColor(0x220000FF)
+                        .strokeWidth(2f)
+                )
+            }
+
+            // 更新底部座標顯示
+            binding.includeBottomSheet.tvLatLng.text =
+                "緯度: %.5f, 經度: %.5f".format(latLng.latitude, latLng.longitude)
+        }
+
 
         googleMap.setOnMarkerClickListener { marker ->
             marker.showInfoWindow()

@@ -8,6 +8,7 @@ import com.allenchu66.geofenceapp.repository.GeofenceLocalRepository
 import com.allenchu66.geofenceapp.repository.GeofenceRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 
 /**
  * GeofenceManager:
@@ -47,6 +48,15 @@ class GeofenceManager(
             }
     }
 
+    fun observeIncomingGeofences(
+        onUpdate: (List<GeofenceData>) -> Unit,
+        onError: (Exception) -> Unit
+    ): ListenerRegistration? {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return null
+        return remoteRepo.listenIncomingGeofences(uid, onUpdate, onError)
+    }
+
+
     /**
      * 讀取並回傳 "owner 為自己、target 為指定人" 的 geofence 列表
      */
@@ -84,10 +94,13 @@ class GeofenceManager(
         onSuccess: (String) -> Unit,
         onFailure: (String) -> Unit
     ) {
+        val finalFenceId = fenceId ?: firestore.collection("users")
+            .document(ownerUid)
+            .collection("geofences")
+            .document().id
         remoteRepo.saveGeofence(
             GeofenceData(
-                fenceId = fenceId ?: firestore.collection("users").document(ownerUid)
-                    .collection("geofences").document().id,
+                fenceId = finalFenceId,
                 ownerUid = ownerUid,
                 targetUid = FirebaseAuth.getInstance().currentUser?.uid ?: return,
                 latitude = latitude,
@@ -98,13 +111,11 @@ class GeofenceManager(
                 createdAt = null,
                 updatedAt = null
             )
-        )
-            .addOnSuccessListener {
-                onSuccess(fenceId ?: it.toString())
-            }
-            .addOnFailureListener { e ->
+        ).addOnSuccessListener {
+                onSuccess(finalFenceId)
+        }.addOnFailureListener { e ->
                 onFailure(e.message ?: "Unknown error")
-            }
+        }
     }
 
     /**
@@ -126,5 +137,9 @@ class GeofenceManager(
      */
     fun removeAllLocalGeofences() {
         helper.removeAllGeofences()
+    }
+
+    fun addGeofenceToLocal(data: GeofenceData) {
+        helper.addGeofence(data)
     }
 }

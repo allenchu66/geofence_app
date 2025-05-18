@@ -45,7 +45,7 @@
                 android:src="@drawable/baseline_edit_24"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:padding="4dp"
-                app:tint="@color/colorPrimary"
+                app:tint="@color/white"
                 android:contentDescription="Change profile photo" />
         </FrameLayout>
 
@@ -60,12 +60,16 @@
             app:layout_constraintTop_toBottomOf="@id/layoutAvatar"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="24dp">
+            android:layout_marginTop="24dp"
+            app:boxStrokeColor="@color/colorPrimary"
+            app:hintTextColor="@color/colorPrimary">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etEmail"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="textEmailAddress" />
+                android:inputType="textEmailAddress"
+                android:textColor="@color/black"
+                android:textColorHint="@color/black"/>
         </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Nickname -->
@@ -78,12 +82,16 @@
             app:layout_constraintTop_toBottomOf="@id/tilEmail"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="16dp">
+            android:layout_marginTop="16dp"
+            app:boxStrokeColor="@color/colorPrimary"
+            app:hintTextColor="@color/colorPrimary">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etNickname"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="textPersonName" />
+                android:inputType="textPersonName"
+                android:textColor="@color/black"
+                android:textColorHint="@color/black"/>
         </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Password -->
@@ -97,12 +105,16 @@
             app:layout_constraintTop_toBottomOf="@id/tilNickname"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="16dp">
+            android:layout_marginTop="16dp"
+            app:boxStrokeColor="@color/colorPrimary"
+            app:hintTextColor="@color/colorPrimary">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etPassword"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="textPassword" />
+                android:inputType="textPassword"
+                android:textColor="@color/black"
+                android:textColorHint="@color/black"/>
         </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Confirm Password -->
@@ -116,12 +128,16 @@
             app:layout_constraintTop_toBottomOf="@id/tilPassword"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="16dp">
+            android:layout_marginTop="16dp"
+            app:boxStrokeColor="@color/colorPrimary"
+            app:hintTextColor="@color/colorPrimary">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etConfirm"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="textPassword" />
+                android:inputType="textPassword"
+                android:textColor="@color/black"
+                android:textColorHint="@color/black"/>
         </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Register Button -->

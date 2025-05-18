@@ -5,6 +5,7 @@ import android.widget.Toast
 import com.allenchu66.geofenceapp.model.GeofenceData
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.firestore
 
 class GeofenceRepository {
@@ -55,6 +56,25 @@ class GeofenceRepository {
         .document(MyUid)
         .collection("geofences")
         .get()
+
+    fun listenIncomingGeofences(
+        myUid: String,
+        onUpdate: (List<GeofenceData>) -> Unit,
+        onError: (Exception) -> Unit
+    ): ListenerRegistration {
+        return db.collection("users")
+            .document(myUid)
+            .collection("geofences")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                    return@addSnapshotListener
+                }
+
+                val list = snapshot?.documents?.mapNotNull { it.toObject(GeofenceData::class.java) } ?: emptyList()
+                onUpdate(list)
+            }
+    }
 }
 
 

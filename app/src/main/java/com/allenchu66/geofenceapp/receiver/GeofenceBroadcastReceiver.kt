@@ -90,8 +90,8 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
                 "action"     to action,
                 "timestamp"  to FieldValue.serverTimestamp()
             ))
-            .addOnSuccessListener { Log.d("GeofenceReceiver", "上拋成功") }
-            .addOnFailureListener { e -> Log.e("GeofenceReceiver", "上拋失敗", e) }
+            .addOnSuccessListener { Log.d(TAG, "上拋成功") }
+            .addOnFailureListener { e -> Log.e(TAG, "上拋失敗", e) }
     }
 
     private fun notifyLocal(context: Context, fenceId: String, action: String) {
