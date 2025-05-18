@@ -167,7 +167,20 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             override fun onStateChanged(bottomSheet: View, newState: Int) {
                 Log.d("20250518","mainSheet:"+newState)
                 updateSheetState()
-                if (newState == STATE_HIDDEN || newState == STATE_COLLAPSED) {
+                if (newState == STATE_EXPANDED) {
+                    val sheetHeight = bottomSheet.height
+                    googleMap.setPadding(
+                        /* left = */ 0,
+                        /* top = */ 0,
+                        /* right = */ 0,
+                        /* bottom = */ sheetHeight
+                    )
+
+                    markerMap[currentSharedUser?.uid]?.let { marker ->
+                        val cameraUpdate = CameraUpdateFactory.newLatLngZoom(marker.position, 17f)
+                        googleMap.animateCamera(cameraUpdate)
+                    }
+                }else if (newState == STATE_HIDDEN || newState == STATE_COLLAPSED) {
                     // 清除地理圍欄標記與圓圈
                     geofenceMarker?.remove()
                     geofenceMarker = null
@@ -323,7 +336,20 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             override fun onStateChanged(bottomSheet: View, newState: Int) {
                 Log.d("20250518","historySheet:"+newState)
                 updateSheetState()
-                if (newState == STATE_HIDDEN || newState == STATE_COLLAPSED) {
+                if (newState == STATE_EXPANDED) {
+                    val sheetHeight = bottomSheet.height
+                    googleMap.setPadding(
+                        /* left = */ 0,
+                        /* top = */ 0,
+                        /* right = */ 0,
+                        /* bottom = */ sheetHeight
+                    )
+
+                    markerMap[currentSharedUser?.uid]?.let { marker ->
+                        val cameraUpdate = CameraUpdateFactory.newLatLngZoom(marker.position, 17f)
+                        googleMap.animateCamera(cameraUpdate)
+                    }
+                }else if (newState == STATE_HIDDEN || newState == STATE_COLLAPSED) {
                     historyPolyline?.remove()
                     historyPolyline = null
 
@@ -1123,8 +1149,6 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             historySheet.state == STATE_EXPANDED -> sheetState = SheetState.HISTORY
             else -> sheetState = SheetState.NONE
         }
-
-        Log.d("20250518","sheet state:"+sheetState.toString())
 
         // 根據 state 決定底部 padding
         val bottomPadding = when (sheetState) {
