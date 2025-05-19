@@ -130,7 +130,7 @@ class MainActivity : AppCompatActivity() {
         navigateIfLoggedIn()
 
         //請求前景定位權限
-        requestLocationPermissions()
+        showPermissionRationale()
 
         // Hide the status bar.
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN
@@ -295,6 +295,44 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * ConsentFragment 同意之後呼叫，啟動權限解釋＆請求流程
+     */
+    private var hasRequestedPermissions = false
+    fun startPermissionFlow() {
+        if (!hasRequestedPermissions) {
+            showPermissionRationale()
+            hasRequestedPermissions = true
+        }
+    }
+
+    private fun showPermissionRationale() {
+        val needFine = shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)
+        val needBackground = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        val needNotify = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+
+        if (needFine || needBackground || needNotify) {
+            AlertDialog.Builder(this)
+                .setTitle("需要定位與通知權限")
+                .setMessage(
+                    "為了提供即時位置共享、地理圍欄通知，以及當您或好友進出特定區域時推播提醒，" +
+                            "本 App 需要取得定位（含背景定位）與通知權限。\n\n" +
+                            "請您同意，才能完整使用所有功能。"
+                )
+                .setPositiveButton("好，了解") { _, _ ->
+                    requestLocationPermissions()
+                }
+                .setNegativeButton("取消") { _, _ ->
+                    Toast.makeText(this, "無法取得完整功能", Toast.LENGTH_SHORT).show()
+                }
+                .show()
+        } else {
+            requestLocationPermissions()
+        }
+    }
+
     private fun requestLocationPermissions() {
         val perms = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -330,7 +368,7 @@ class MainActivity : AppCompatActivity() {
                 // Android 11 以上：引導至設定頁面
                 AlertDialog.Builder(this)
                     .setTitle("需要背景定位")
-                    .setMessage("Android 11 以上版本需至設定頁面手動開啟[背景定位] \n位置權限 -> 一率允許")
+                    .setMessage("Android 11 以上版本需至設定頁面手動開啟[背景定位] \n位置權限 -> 一律允許")
                     .setPositiveButton("前往設定") { _, _ ->
                         backgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
                     }

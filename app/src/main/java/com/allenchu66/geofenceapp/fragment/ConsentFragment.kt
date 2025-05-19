@@ -11,6 +11,7 @@ import androidx.core.text.HtmlCompat
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.allenchu66.geofenceapp.R
+import com.allenchu66.geofenceapp.activity.MainActivity
 import com.allenchu66.geofenceapp.databinding.FragmentConsentBinding
 
 class ConsentFragment : Fragment() {
@@ -52,6 +53,7 @@ class ConsentFragment : Fragment() {
                 return@setOnClickListener
             }
             sharedPref.edit().putBoolean("hasConsented", true).apply()
+            (activity as? MainActivity)?.startPermissionFlow()
             findNavController().navigate(R.id.action_consentFragment_to_loginFragment)
         }
     }
