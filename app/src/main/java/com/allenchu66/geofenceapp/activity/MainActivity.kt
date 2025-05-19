@@ -123,6 +123,10 @@ class MainActivity : AppCompatActivity() {
         auth = FirebaseAuth.getInstance()
         initViewModel()
         setupDrawer()
+
+        // 檢查是否同意條款
+        if (!checkConsentAndNavigate()) return
+
         navigateIfLoggedIn()
 
         //請求前景定位權限
@@ -132,6 +136,25 @@ class MainActivity : AppCompatActivity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN
         actionBar?.hide()
     }
+
+    private fun checkConsentAndNavigate(): Boolean {
+        val sharedPref = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val hasConsented = sharedPref.getBoolean("hasConsented", false)
+
+        if (!hasConsented) {
+            val navHostFragment = supportFragmentManager
+                .findFragmentById(R.id.fragmentContainerView) as NavHostFragment
+            val navController = navHostFragment.navController
+
+            // 避免重複導向
+            if (navController.currentDestination?.id != R.id.consentFragment) {
+                navController.navigate(R.id.consentFragment)
+            }
+            return false
+        }
+        return true
+    }
+
 
     fun updateProfileUI(user: FirebaseUser?) {
         user?.let {

@@ -1,5 +1,7 @@
 package com.allenchu66.geofenceapp.fragment
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
@@ -61,6 +63,12 @@ class LoginFragment : Fragment() {
         binding.registerButton.setOnClickListener{
             findNavController().navigate(R.id.action_loginFragment_to_registerFragment)
         }
+
+        binding.btnPrivacyPolicy.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://allenchu66.github.io/geofence_app/"))
+            startActivity(intent)
+        }
+
     }
 
     private fun createUserIfNotExists(user: FirebaseUser) {
