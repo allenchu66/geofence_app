@@ -3,10 +3,13 @@ package com.allenchu66.geofenceapp.service
 import android.annotation.SuppressLint
 import android.app.*
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import android.Manifest
 import com.allenchu66.geofenceapp.R
 import com.google.android.gms.location.*
 import com.google.firebase.auth.FirebaseAuth
@@ -16,6 +19,7 @@ import java.util.*
 class LocationUpdateService : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
+    private val TAG = "LocationUpdateService"
 
     override fun onCreate() {
         super.onCreate()
@@ -28,7 +32,8 @@ class LocationUpdateService : Service() {
         val channelName = "定位更新"
         val notificationManager = getSystemService(NotificationManager::class.java)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
+            val channel =
+                NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
             notificationManager.createNotificationChannel(channel)
         }
 
@@ -49,31 +54,46 @@ class LocationUpdateService : Service() {
 
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30_000L).build() //30s
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                val location = result.lastLocation ?: return
-                val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-                val now = System.currentTimeMillis().toString()
-                val data = hashMapOf(
-                    "user_id" to uid,
-                    "latitude" to location.latitude,
-                    "longitude" to location.longitude,
-                    "timestamp" to Date()
-                )
-                FirebaseFirestore.getInstance()
-                    .collection("locations")
-                    .document(uid)
-                    .collection("history")
-                    .document(now)
-                    .set(data)
-                    .addOnSuccessListener { Log.d("LocationService", "Location uploaded") }
-                    .addOnFailureListener { Log.e("LocationService", "Upload failed", it) }
+        try {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED
+            ) return
+            fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+            val locationRequest =
+                LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 120_000L)
+                    .build() //30s
+            locationCallback = object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    val location = result.lastLocation ?: return
+                    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+                    val now = System.currentTimeMillis().toString()
+                    val data = hashMapOf(
+                        "user_id" to uid,
+                        "latitude" to location.latitude,
+                        "longitude" to location.longitude,
+                        "timestamp" to Date()
+                    )
+                    FirebaseFirestore.getInstance()
+                        .collection("locations")
+                        .document(uid)
+                        .collection("history")
+                        .document(now)
+                        .set(data)
+                        .addOnSuccessListener { Log.d("LocationService", "Location uploaded") }
+                        .addOnFailureListener { Log.e("LocationService", "Upload failed", it) }
+                }
             }
-        }
 
-        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                mainLooper
+            )
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Location permission missing, cannot start updates", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to request location updates", e)
+        }
     }
 
     override fun onDestroy() {

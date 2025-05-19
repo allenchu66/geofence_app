@@ -90,9 +90,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     private val markerMap = mutableMapOf<String, Marker>()
 
     private val LOCATION_PERMISSION_REQUEST_CODE = 1001
-    private val UPDATE_INTERVAL_MS = 60_000L
     private val handler = Handler()
-    private lateinit var locationUpdateRunnable: Runnable
 
     private lateinit var mainSheet: BottomSheetBehavior<LinearLayout>
     private lateinit var historySheet: BottomSheetBehavior<LinearLayout>
@@ -145,7 +143,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             childFragmentManager.findFragmentById(R.id.mapFragment) as SupportMapFragment
         mapFragment.getMapAsync(this)
         //定時上傳現在位置到firestore
-        setUploadCurrentLocationTimer()
+        //setUploadCurrentLocationTimer()
 
         setUpBottomSheet()
 
@@ -454,17 +452,20 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         }
     }
 
-    private fun setUploadCurrentLocationTimer() {
-        // 定時上傳自己的位置
-        locationUpdateRunnable = object : Runnable {
-            @SuppressLint("MissingPermission")
-            override fun run() {
-                getCurrentLocationAndUpload()
-                handler.postDelayed(this, UPDATE_INTERVAL_MS)
-            }
-        }
-        handler.post(locationUpdateRunnable)
-    }
+//    private val UPDATE_INTERVAL_MS = 60_000L
+//
+//    private lateinit var locationUpdateRunnable: Runnable
+//    private fun setUploadCurrentLocationTimer() {
+//        // 定時上傳自己的位置
+//        locationUpdateRunnable = object : Runnable {
+//            @SuppressLint("MissingPermission")
+//            override fun run() {
+//                getCurrentLocationAndUpload()
+//                handler.postDelayed(this, UPDATE_INTERVAL_MS)
+//            }
+//        }
+//        handler.post(locationUpdateRunnable)
+//    }
 
 
     private val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -1074,21 +1075,21 @@ class MapFragment : Fragment(), OnMapReadyCallback {
     }
 
     // 取得位置並上傳
-    @SuppressLint("MissingPermission")
-    private fun getCurrentLocationAndUpload() {
-        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity())
-        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-            if (location != null) {
-                val userId =
-                    FirebaseAuth.getInstance().currentUser?.uid ?: return@addOnSuccessListener
-                mapViewModel.updateLocationToFirestore(
-                    userId,
-                    location.latitude,
-                    location.longitude
-                )
-            }
-        }
-    }
+//    @SuppressLint("MissingPermission")
+//    private fun getCurrentLocationAndUpload() {
+//        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity())
+//        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+//            if (location != null) {
+//                val userId =
+//                    FirebaseAuth.getInstance().currentUser?.uid ?: return@addOnSuccessListener
+//                mapViewModel.updateLocationToFirestore(
+//                    userId,
+//                    location.latitude,
+//                    location.longitude
+//                )
+//            }
+//        }
+//    }
 
     // 新增或更新 Marker
     private fun updateOrAddMarker(
@@ -1200,7 +1201,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        handler.removeCallbacks(locationUpdateRunnable)
+        //handler.removeCallbacks(locationUpdateRunnable)
         _binding = null
     }
 
