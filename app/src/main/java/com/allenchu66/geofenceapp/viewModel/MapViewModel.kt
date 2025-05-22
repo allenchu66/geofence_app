@@ -72,8 +72,6 @@ class MapViewModel(application: Application, private val repo: LocationRepositor
                 }
                 cluster.copy(locationName = address)
             }
-
-            Log.d("20250518","fetchAddressesForClusters size:"+updated.size)
             _historyWithAddress.postValue(updated)
         }
     }

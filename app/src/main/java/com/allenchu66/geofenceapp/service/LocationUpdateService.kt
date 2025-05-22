@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import android.Manifest
+import android.os.Build
 import com.allenchu66.geofenceapp.R
 import com.google.android.gms.location.*
 import com.google.firebase.auth.FirebaseAuth
@@ -23,8 +24,16 @@ class LocationUpdateService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        startForegroundService()
-        startLocationUpdates()
+    }
+
+    private fun hasRequiredPermissions(): Boolean {
+        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val fgService = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.FOREGROUND_SERVICE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        } else true
+
+        return (fine || coarse) && fgService
     }
 
     private fun startForegroundService() {
@@ -61,7 +70,7 @@ class LocationUpdateService : Service() {
             fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
             val locationRequest =
                 LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 120_000L)
-                    .build() //30s
+                    .build() //120s
             locationCallback = object : LocationCallback() {
                 override fun onLocationResult(result: LocationResult) {
                     val location = result.lastLocation ?: return
@@ -79,8 +88,8 @@ class LocationUpdateService : Service() {
                         .collection("history")
                         .document(now)
                         .set(data)
-                        .addOnSuccessListener { Log.d("LocationService", "Location uploaded") }
-                        .addOnFailureListener { Log.e("LocationService", "Upload failed", it) }
+                        .addOnSuccessListener { Log.d(TAG, "Location uploaded") }
+                        .addOnFailureListener { Log.e(TAG, "Upload failed", it) }
                 }
             }
 
@@ -98,13 +107,24 @@ class LocationUpdateService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        fusedLocationClient.removeLocationUpdates(locationCallback)
+        if (::fusedLocationClient.isInitialized && ::locationCallback.isInitialized) {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // 如果服務被系統終止，儘量自動重啟
+        if (!hasRequiredPermissions()) {
+            Log.e(TAG, "缺少啟動前景服務的必要權限，無法啟動服務")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        startForegroundService()
+        startLocationUpdates()
+
         return START_STICKY
     }
 }

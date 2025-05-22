@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
 <!-- 應用整體主題 -->
-<style name="Theme.GeofenceApp" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+<style name="Theme.GeofenceApp" parent="Theme.MaterialComponents.NoActionBar">
     <!-- 主色調 -->
     <item name="colorPrimary">@color/colorPrimary</item>
     <item name="colorPrimaryVariant">@color/colorPrimaryVariant</item>
